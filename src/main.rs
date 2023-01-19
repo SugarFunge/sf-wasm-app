@@ -1,9 +1,11 @@
 use account::AccountPlugin;
+use asset::AssetPlugin;
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
+use class::ClassPlugin;
 use prelude::*;
 use simula_action::ActionPlugin;
 use simula_camera::orbitcam::*;
@@ -14,6 +16,8 @@ use simula_viz::{
 };
 
 pub mod account;
+pub mod asset;
+pub mod class;
 pub mod prelude;
 pub mod util;
 
@@ -27,8 +31,8 @@ fn main() {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "[Simbotic] Simula - Empty".to_string(),
-                width: 940.,
-                height: 528.,
+                width: 1024.,
+                height: 612.,
                 ..default()
             },
             ..default()
@@ -41,6 +45,8 @@ fn main() {
         .add_plugin(AxesPlugin)
         .add_plugin(GridPlugin)
         .add_plugin(AccountPlugin)
+        .add_plugin(ClassPlugin)
+        .add_plugin(AssetPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();

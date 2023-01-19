@@ -36,6 +36,7 @@ pub struct FundAccountInputData {
     pub seed: String,
     pub to: String,
     pub amount: u64,
+    pub loading: bool,
 }
 
 impl Default for FundAccountInputData {
@@ -44,6 +45,7 @@ impl Default for FundAccountInputData {
             seed: "//Alice".to_string(),
             to: "".to_string(),
             amount: 1,
+            loading: false,
         }
     }
 }
@@ -55,35 +57,53 @@ pub fn account_fund_ui(
     account_output: &Res<AccountOutputData>,
 ) {
     ui.label("Fund Account");
+    ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut account_input.fund_account.seed);
+    ui.text_edit_singleline(&mut account_input.fund_input.seed);
     ui.label("To");
-    ui.text_edit_singleline(&mut account_input.fund_account.to);
+    ui.text_edit_singleline(&mut account_input.fund_input.to);
     ui.label("Amount");
     ui.label("The Amount is represented in 10^18 units.");
-    ui.add(egui::DragValue::new::<u64>(&mut account_input.fund_account.amount.into()).speed(0.1));
-    if ui.button("Fund").clicked() {
-        funded_tx
-            .0
-            .send(FundAccountRequest {
-                input: FundAccountInput {
-                    seed: Seed::from(account_input.fund_account.seed.clone()),
-                    to: Account::from(account_input.fund_account.to.clone()),
-                    amount: Balance::from(
-                        (account_input.fund_account.amount as u128) * (u128::pow(10, 18)),
-                    ),
-                },
-            })
-            .unwrap();
+    ui.add(egui::DragValue::new::<u64>(&mut account_input.fund_input.amount.into()).speed(0.1));
+    if account_input.fund_input.loading {
+        ui.separator();
+        ui.add(egui::Spinner::default());
+    } else {
+        if ui.button("Fund").clicked() {
+            funded_tx
+                .0
+                .send(FundAccountRequest {
+                    input: FundAccountInput {
+                        seed: Seed::from(account_input.fund_input.seed.clone()),
+                        to: Account::from(account_input.fund_input.to.clone()),
+                        amount: Balance::from(
+                            (account_input.fund_input.amount as u128) * (u128::pow(10, 18)),
+                        ),
+                    },
+                })
+                .unwrap();
+            account_input.fund_input.loading = true;
+        }
     }
-    if let Some(funded) = &account_output.fund_account {
+    if let Some(output) = &account_output.fund_output {
         ui.separator();
         ui.label("From");
-        ui.text_edit_singleline(&mut funded.from.as_str());
+        ui.text_edit_singleline(&mut output.from.as_str());
         ui.label("To");
-        ui.text_edit_singleline(&mut funded.to.as_str());
+        ui.text_edit_singleline(&mut output.to.as_str());
         ui.label("Amount");
-        ui.text_edit_singleline(&mut format!("{:?}", &funded.amount));
+        ui.text_edit_singleline(&mut format!("{:?}", &output.amount));
+    }
+}
+
+fn handle_funded_response(
+    mut account_output: ResMut<AccountOutputData>,
+    mut account_input: ResMut<AccountInputData>,
+    funded_rx: Res<OutputReceiver<FundAccountOutput>>,
+) {
+    if let Ok(funded) = funded_rx.0.try_recv() {
+        account_output.fund_output = Some(funded);
+        account_input.fund_input.loading = false;
     }
 }
 
@@ -92,6 +112,7 @@ pub struct AccountFundPlugin;
 impl Plugin for AccountFundPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup_in_out_channels::<FundAccountRequest, FundAccountOutput>)
-            .add_system(request_handler::<FundAccountRequest, FundAccountInput, FundAccountOutput>);
+            .add_system(request_handler::<FundAccountRequest, FundAccountInput, FundAccountOutput>)
+            .add_system(handle_funded_response);
     }
 }
