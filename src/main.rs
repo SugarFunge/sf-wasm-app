@@ -1,8 +1,10 @@
+use account::AccountPlugin;
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
+use prelude::*;
 use simula_action::ActionPlugin;
 use simula_camera::orbitcam::*;
 use simula_viz::{
@@ -11,8 +13,15 @@ use simula_viz::{
     lines::{LineMesh, LinesMaterial, LinesPlugin},
 };
 
+pub mod account;
+pub mod prelude;
+pub mod util;
+
 fn main() {
+    let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap());
+
     App::new()
+        .insert_resource(TokioRuntime { runtime })
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(ClearColor(Color::rgb(0.105, 0.10, 0.11)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -31,6 +40,7 @@ fn main() {
         .add_plugin(LinesPlugin)
         .add_plugin(AxesPlugin)
         .add_plugin(GridPlugin)
+        .add_plugin(AccountPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();
