@@ -82,7 +82,7 @@ pub fn create_class_ui(
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
         ui.label("ClassId");
-        ui.text_edit_singleline(&mut format!("{:?}", output.class_id));
+        ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
     }
 }
 
@@ -91,8 +91,10 @@ pub fn handle_create_response(
     mut class_input: ResMut<ClassInputData>,
     created_rx: Res<OutputReceiver<CreateClassOutput>>,
 ) {
-    if let Ok(created) = created_rx.0.try_recv() {
-        class_output.create_output = Some(created);
+    if let Ok(created_result) = created_rx.0.try_recv() {
+        if let Some(created) = created_result {
+            class_output.create_output = Some(created);
+        }
         class_input.create_input.loading = false;
     }
 }

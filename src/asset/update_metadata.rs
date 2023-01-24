@@ -80,9 +80,9 @@ pub fn update_asset_metadata_ui(
     if let Some(output) = &asset_output.update_metadata_output {
         ui.separator();
         ui.label("Asset ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.asset_id));
+        ui.text_edit_singleline(&mut u64::from(output.asset_id).to_string());
         ui.label("Class ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.class_id));
+        ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
         ui.label("Metadata");
@@ -95,8 +95,10 @@ pub fn handle_update_metadata_response(
     mut asset_input: ResMut<AssetInputData>,
     response_rx: Res<OutputReceiver<UpdateMetadataOutput>>,
 ) {
-    if let Ok(response) = response_rx.0.try_recv() {
-        asset_output.update_metadata_output = Some(response);
+    if let Ok(response_result) = response_rx.0.try_recv() {
+        if let Some(response) = response_result {
+            asset_output.update_metadata_output = Some(response);
+        }
         asset_input.update_metadata_input.loading = false;
     }
 }

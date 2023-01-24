@@ -66,7 +66,7 @@ pub fn account_balance_ui(
     if let Some(output) = &account_output.balance_output {
         ui.separator();
         ui.label("Balance");
-        ui.text_edit_singleline(&mut format!("{:?}", &output.balance));
+        ui.text_edit_singleline(&mut u128::from(output.balance).to_string());
     }
 }
 
@@ -75,8 +75,10 @@ pub fn handle_balance_response(
     mut account_input: ResMut<AccountInputData>,
     balance_rx: Res<OutputReceiver<AccountBalanceOutput>>,
 ) {
-    if let Ok(balance) = balance_rx.0.try_recv() {
-        account_output.balance_output = Some(balance);
+    if let Ok(balance_result) = balance_rx.0.try_recv() {
+        if let Some(balance) = balance_result {
+            account_output.balance_output = Some(balance);
+        }
         account_input.balance_input.loading = false;
     }
 }

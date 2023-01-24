@@ -58,8 +58,10 @@ pub fn handle_create_response(
     mut account_input: ResMut<AccountInputData>,
     created_rx: Res<OutputReceiver<CreateAccountOutput>>,
 ) {
-    if let Ok(created) = created_rx.0.try_recv() {
-        account_output.create_output = Some(created);
+    if let Ok(created_result) = created_rx.0.try_recv() {
+        if let Some(created) = created_result {
+            account_output.create_output = Some(created);
+        }
         account_input.create_input.loading = false;
     }
 }

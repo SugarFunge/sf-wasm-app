@@ -75,8 +75,10 @@ pub fn handle_seeded_response(
     mut account_input: ResMut<AccountInputData>,
     seeded_rx: Res<OutputReceiver<SeededAccountOutput>>,
 ) {
-    if let Ok(seeded) = seeded_rx.0.try_recv() {
-        account_output.seeded_output = Some(seeded);
+    if let Ok(seeded_result) = seeded_rx.0.try_recv() {
+        if let Some(seeded) = seeded_result {
+            account_output.seeded_output = Some(seeded);
+        }
         account_input.seeded_input.loading = false;
     }
 }

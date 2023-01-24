@@ -79,11 +79,11 @@ pub fn create_asset_ui(
     if let Some(output) = &asset_output.create_output {
         ui.separator();
         ui.label("Class ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.class_id));
+        ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
         ui.label("Asset ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.asset_id));
+        ui.text_edit_singleline(&mut u64::from(output.asset_id).to_string());
         ui.label("Who");
-        ui.text_edit_multiline(&mut output.who.as_str());
+        ui.text_edit_singleline(&mut output.who.as_str());
     }
 }
 
@@ -92,8 +92,10 @@ pub fn handle_create_response(
     mut asset_input: ResMut<AssetInputData>,
     created_rx: Res<OutputReceiver<CreateOutput>>,
 ) {
-    if let Ok(created) = created_rx.0.try_recv() {
-        asset_output.create_output = Some(created);
+    if let Ok(created_result) = created_rx.0.try_recv() {
+        if let Some(created) = created_result {
+            asset_output.create_output = Some(created);
+        }
         asset_input.create_input.loading = false;
     }
 }

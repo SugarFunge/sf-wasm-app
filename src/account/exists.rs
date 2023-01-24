@@ -73,8 +73,10 @@ pub fn handle_exists_response(
     mut account_input: ResMut<AccountInputData>,
     exists_rx: Res<OutputReceiver<AccountExistsOutput>>,
 ) {
-    if let Ok(exists) = exists_rx.0.try_recv() {
-        account_output.exists_output = Some(exists);
+    if let Ok(exists_result) = exists_rx.0.try_recv() {
+        if let Some(exists) = exists_result {
+            account_output.exists_output = Some(exists);
+        }
         account_input.exists_input.loading = false;
     }
 }

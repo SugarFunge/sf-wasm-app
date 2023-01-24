@@ -62,9 +62,10 @@ pub fn class_info_ui(
         }
     }
     if let Some(output) = &class_output.info_output {
+        ui.separator();
         if let Some(info) = &output.info {
             ui.label("Class ID");
-            ui.text_edit_singleline(&mut format!("{:?}", info.class_id));
+            ui.text_edit_singleline(&mut u64::from(info.class_id).to_string());
             ui.label("Metadata");
             ui.text_edit_multiline(&mut info.metadata.to_string());
             ui.label("Owner");
@@ -80,8 +81,10 @@ pub fn handle_info_response(
     mut class_input: ResMut<ClassInputData>,
     info_rx: Res<OutputReceiver<ClassInfoOutput>>,
 ) {
-    if let Ok(info) = info_rx.0.try_recv() {
-        class_output.info_output = Some(info);
+    if let Ok(info_result) = info_rx.0.try_recv() {
+        if let Some(info) = info_result {
+            class_output.info_output = Some(info);
+        }
         class_input.info_input.loading = false;
     }
 }

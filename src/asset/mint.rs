@@ -85,11 +85,11 @@ pub fn asset_mint_ui(
         ui.label("To");
         ui.text_edit_singleline(&mut output.to.as_str());
         ui.label("Class ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.class_id));
+        ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
         ui.label("Asset ID");
-        ui.text_edit_singleline(&mut format!("{:?}", output.asset_id));
+        ui.text_edit_singleline(&mut u64::from(output.asset_id).to_string());
         ui.label("Amount");
-        ui.text_edit_singleline(&mut format!("{:?}", output.amount));
+        ui.text_edit_singleline(&mut u128::from(output.amount).to_string());
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
     }
@@ -100,8 +100,10 @@ pub fn handle_mint_response(
     mut asset_input: ResMut<AssetInputData>,
     mint_rx: Res<OutputReceiver<MintOutput>>,
 ) {
-    if let Ok(mint) = mint_rx.0.try_recv() {
-        asset_output.mint_output = Some(mint);
+    if let Ok(mint_result) = mint_rx.0.try_recv() {
+        if let Some(mint) = mint_result {
+            asset_output.mint_output = Some(mint);
+        }
         asset_input.mint_input.loading = false;
     }
 }

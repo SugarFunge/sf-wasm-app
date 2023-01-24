@@ -1,10 +1,12 @@
 use account::AccountPlugin;
 use asset::AssetPlugin;
+use bag::BagPlugin;
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
+use bundle::BundlePlugin;
 use class::ClassPlugin;
 use prelude::*;
 use simula_action::ActionPlugin;
@@ -17,6 +19,8 @@ use simula_viz::{
 
 pub mod account;
 pub mod asset;
+pub mod bag;
+pub mod bundle;
 pub mod class;
 pub mod prelude;
 pub mod util;
@@ -47,6 +51,8 @@ fn main() {
         .add_plugin(AccountPlugin)
         .add_plugin(ClassPlugin)
         .add_plugin(AssetPlugin)
+        .add_plugin(BagPlugin)
+        .add_plugin(BundlePlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();

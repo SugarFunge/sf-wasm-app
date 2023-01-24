@@ -88,7 +88,7 @@ pub fn account_ui(
                 fund::account_fund_ui(ui, &mut account_input, &funded_tx, &account_output)
             }
             AccountActions::GetAccountBalance => {
-                balance::account_balance_ui(ui, &mut account_input, &balance_tx, &account_output)   
+                balance::account_balance_ui(ui, &mut account_input, &balance_tx, &account_output)
             }
         }
     });

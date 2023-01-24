@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crossbeam::channel;
-use serde::{Serialize};
+use serde::Serialize;
 use tokio::runtime::Runtime;
 
 #[derive(Resource)]
@@ -15,10 +15,10 @@ pub struct InputSender<T>(pub channel::Sender<T>);
 pub struct InputReceiver<T>(pub channel::Receiver<T>);
 
 #[derive(Resource, Deref, Clone)]
-pub struct OutputSender<T>(pub channel::Sender<T>);
+pub struct OutputSender<T>(pub channel::Sender<Option<T>>);
 
 #[derive(Resource, Deref, Clone)]
-pub struct OutputReceiver<T>(pub channel::Receiver<T>);
+pub struct OutputReceiver<T>(pub channel::Receiver<Option<T>>);
 
 pub trait Request<T: Serialize + Send + Sync>: Send + Sync + 'static {
     fn endpoint(&self) -> &str;

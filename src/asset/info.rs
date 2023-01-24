@@ -67,6 +67,7 @@ pub fn asset_info_ui(
         asset_input.info_input.loading = true;
     }
     if let Some(output) = &asset_output.info_output {
+        ui.separator();
         if let Some(info) = &output.info {
             ui.label("Class ID");
             ui.text_edit_singleline(&mut format!("{:?}", info.class_id));
@@ -74,6 +75,8 @@ pub fn asset_info_ui(
             ui.text_edit_singleline(&mut format!("{:?}", info.asset_id));
             ui.label("Metadata");
             ui.text_edit_singleline(&mut info.metadata.to_string());
+        } else {
+            ui.label("No asset info found");
         }
     }
 }
@@ -83,8 +86,10 @@ pub fn handle_info_response(
     mut asset_input: ResMut<AssetInputData>,
     info_rx: Res<OutputReceiver<AssetInfoOutput>>,
 ) {
-    if let Ok(info) = info_rx.0.try_recv() {
-        asset_output.info_output = Some(info);
+    if let Ok(info_result) = info_rx.0.try_recv() {
+        if let Some(info) = info_result {
+            asset_output.info_output = Some(info);
+        }
         asset_input.info_input.loading = false;
     }
 }

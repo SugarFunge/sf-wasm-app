@@ -92,7 +92,7 @@ pub fn account_fund_ui(
         ui.label("To");
         ui.text_edit_singleline(&mut output.to.as_str());
         ui.label("Amount");
-        ui.text_edit_singleline(&mut format!("{:?}", &output.amount));
+        ui.text_edit_singleline(&mut u128::from(output.amount).to_string());
     }
 }
 
@@ -101,8 +101,10 @@ fn handle_funded_response(
     mut account_input: ResMut<AccountInputData>,
     funded_rx: Res<OutputReceiver<FundAccountOutput>>,
 ) {
-    if let Ok(funded) = funded_rx.0.try_recv() {
-        account_output.fund_output = Some(funded);
+    if let Ok(funded_result) = funded_rx.0.try_recv() {
+        if let Some(funded) = funded_result {
+            account_output.fund_output = Some(funded);
+        }
         account_input.fund_input.loading = false;
     }
 }

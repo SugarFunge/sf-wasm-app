@@ -4,9 +4,13 @@ use sugarfunge_api_types::asset::*;
 
 use crate::prelude::*;
 
+pub mod balance;
+pub mod balances;
+pub mod burn;
 pub mod create;
 pub mod info;
 pub mod mint;
+pub mod transfer_from;
 pub mod update_metadata;
 
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
@@ -28,10 +32,10 @@ pub struct AssetInputData {
     info_input: info::AssetInfoInputData,
     update_metadata_input: update_metadata::UpdateAssetMetadataInputData,
     mint_input: mint::AssetMintInputData,
-    // burn_input: burn::AssetBurnInputData,
-    // balance_input: balance::AssetBalanceInputData,
-    // balances_input: balances::AssetBalancesInputData,
-    // transfer_from_input: transfer_from::AssetTransferFromInputData,
+    burn_input: burn::AssetBurnInputData,
+    balance_input: balance::AssetBalanceInputData,
+    balances_input: balances::AssetBalancesInputData,
+    transfer_from_input: transfer_from::AssetTransferFromInputData,
 }
 
 #[derive(Resource, Default, Debug)]
@@ -55,70 +59,72 @@ pub fn asset_ui(
     info_tx: Res<InputSender<info::AssetInfoRequest>>,
     update_metadata_tx: Res<InputSender<update_metadata::UpdateMetadataRequest>>,
     mint_tx: Res<InputSender<mint::AssetMintRequest>>,
-    // burn_tx: Res<InputSender<AssetBurnRequest>>,
-    // balance_tx: Res<InputSender<AssetBalanceRequest>>,
-    // balances_tx: Res<InputSender<AssetBalancesRequest>>,
-    // transfer_from_tx: Res<InputSender<AssetTransferFromRequest>>,
+    burn_tx: Res<InputSender<burn::AssetBurnRequest>>,
+    balance_tx: Res<InputSender<balance::AssetBalanceRequest>>,
+    balances_tx: Res<InputSender<balances::AssetBalancesRequest>>,
+    transfer_from_tx: Res<InputSender<transfer_from::AssetTransferFromRequest>>,
 ) {
-    egui::Window::new("Asset").show(&mut ctx.ctx_mut(), |ui| {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut *asset_actions, AssetActions::CreateAsset, "Create");
-            ui.selectable_value(&mut *asset_actions, AssetActions::AssetInfo, "Info");
-            ui.selectable_value(
-                &mut *asset_actions,
-                AssetActions::UpdateAssetMetadata,
-                "Update Metadata",
-            );
-            ui.selectable_value(&mut *asset_actions, AssetActions::AssetMint, "Mint");
-        });
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut *asset_actions, AssetActions::AssetBurn, "Burn");
-            ui.selectable_value(&mut *asset_actions, AssetActions::AssetBalance, "Balance");
-            ui.selectable_value(&mut *asset_actions, AssetActions::AssetBalances, "Balances");
-            ui.selectable_value(
-                &mut *asset_actions,
-                AssetActions::AssetTransferFrom,
-                "Transfer From",
-            );
-        });
-        ui.separator();
-        match &*asset_actions {
-            AssetActions::CreateAsset => {
-                create::create_asset_ui(ui, &mut asset_input, &create_tx, &asset_output);
-            }
-            AssetActions::AssetInfo => {
-                info::asset_info_ui(ui, &mut asset_input, &info_tx, &asset_output);
-            }
-            AssetActions::UpdateAssetMetadata => {
-                update_metadata::update_asset_metadata_ui(
-                    ui,
-                    &mut asset_input,
-                    &update_metadata_tx,
-                    &asset_output,
+    egui::Window::new("Asset")
+        .scroll2([false, true])
+        .show(&mut ctx.ctx_mut(), |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut *asset_actions, AssetActions::CreateAsset, "Create");
+                ui.selectable_value(&mut *asset_actions, AssetActions::AssetInfo, "Info");
+                ui.selectable_value(
+                    &mut *asset_actions,
+                    AssetActions::UpdateAssetMetadata,
+                    "Update Metadata",
                 );
+                ui.selectable_value(&mut *asset_actions, AssetActions::AssetMint, "Mint");
+            });
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut *asset_actions, AssetActions::AssetBurn, "Burn");
+                ui.selectable_value(&mut *asset_actions, AssetActions::AssetBalance, "Balance");
+                ui.selectable_value(&mut *asset_actions, AssetActions::AssetBalances, "Balances");
+                ui.selectable_value(
+                    &mut *asset_actions,
+                    AssetActions::AssetTransferFrom,
+                    "Transfer From",
+                );
+            });
+            ui.separator();
+            match &*asset_actions {
+                AssetActions::CreateAsset => {
+                    create::create_asset_ui(ui, &mut asset_input, &create_tx, &asset_output);
+                }
+                AssetActions::AssetInfo => {
+                    info::asset_info_ui(ui, &mut asset_input, &info_tx, &asset_output);
+                }
+                AssetActions::UpdateAssetMetadata => {
+                    update_metadata::update_asset_metadata_ui(
+                        ui,
+                        &mut asset_input,
+                        &update_metadata_tx,
+                        &asset_output,
+                    );
+                }
+                AssetActions::AssetMint => {
+                    mint::asset_mint_ui(ui, &mut asset_input, &mint_tx, &asset_output);
+                }
+                AssetActions::AssetBurn => {
+                    burn::asset_burn_ui(ui, &mut asset_input, &burn_tx, &asset_output);
+                }
+                AssetActions::AssetBalance => {
+                    balance::asset_balance_ui(ui, &mut asset_input, &balance_tx, &asset_output);
+                }
+                AssetActions::AssetBalances => {
+                    balances::asset_balances_ui(ui, &mut asset_input, &balances_tx, &asset_output);
+                }
+                AssetActions::AssetTransferFrom => {
+                    transfer_from::asset_transfer_from_ui(
+                        ui,
+                        &mut asset_input,
+                        &transfer_from_tx,
+                        &asset_output,
+                    );
+                }
             }
-            AssetActions::AssetMint => {
-                mint::asset_mint_ui(ui, &mut asset_input, &mint_tx, &asset_output);
-            }
-            AssetActions::AssetBurn => {
-                // burn::asset_burn_ui(ui, &mut asset_input, &burn_tx, &asset_output);
-            }
-            AssetActions::AssetBalance => {
-                // balance::asset_balance_ui(ui, &mut asset_input, &balance_tx, &asset_output);
-            }
-            AssetActions::AssetBalances => {
-                // balances::asset_balances_ui(ui, &mut asset_input, &balances_tx, &asset_output);
-            }
-            AssetActions::AssetTransferFrom => {
-                // transfer_from::asset_transfer_from_ui(
-                //     ui,
-                //     &mut asset_input,
-                //     &transfer_from_tx,
-                //     &asset_output,
-                // );
-            }
-        }
-    });
+        });
 }
 
 pub struct AssetPlugin;
@@ -132,6 +138,10 @@ impl Plugin for AssetPlugin {
             .add_plugin(create::CreateAssetPlugin)
             .add_plugin(info::AssetInfoPlugin)
             .add_plugin(update_metadata::UpdateAssetMetadataPlugin)
-            .add_plugin(mint::AssetMintPlugin);
+            .add_plugin(mint::AssetMintPlugin)
+            .add_plugin(burn::AssetBurnPlugin)
+            .add_plugin(balance::AssetBalancePlugin)
+            .add_plugin(balances::AssetBalancesPlugin)
+            .add_plugin(transfer_from::AssetTransferFromPlugin);
     }
 }
