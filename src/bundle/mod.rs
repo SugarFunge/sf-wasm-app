@@ -4,6 +4,8 @@ use sugarfunge_api_types::bundle::*;
 
 use crate::prelude::*;
 
+pub mod burn;
+pub mod mint;
 pub mod register;
 
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
@@ -17,8 +19,8 @@ pub enum BundleActions {
 #[derive(Resource, Debug, Default, Clone)]
 pub struct BundleInputData {
     register_input: register::RegisterBundleInputData,
-    // mint_input: mint::MintBundleInputData,
-    // burn_input: burn::BurnBundleInputData,
+    mint_input: mint::MintBundleInputData,
+    burn_input: burn::BurnBundleInputData,
 }
 
 #[derive(Resource, Default, Debug)]
@@ -34,12 +36,16 @@ pub fn bundle_ui(
     mut bundle_input: ResMut<BundleInputData>,
     bundle_output: Res<BundleOutputData>,
     register_tx: Res<InputSender<register::RegisterBundleRequest>>,
-    // mint_tx: Res<InputSender<mint::MintBundleRequest>>,
-    // burn_tx: Res<InputSender<burn::BurnBundleRequest>>,
+    mint_tx: Res<InputSender<mint::MintBundleRequest>>,
+    burn_tx: Res<InputSender<burn::BurnBundleRequest>>,
 ) {
     egui::Window::new("Bundle").show(&mut ctx.ctx_mut(), |ui| {
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut *bundle_actions, BundleActions::RegisterBundle, "Register");
+            ui.selectable_value(
+                &mut *bundle_actions,
+                BundleActions::RegisterBundle,
+                "Register",
+            );
             ui.selectable_value(&mut *bundle_actions, BundleActions::MintBundle, "Mint");
             ui.selectable_value(&mut *bundle_actions, BundleActions::BurnBundle, "Burn");
         });
@@ -49,10 +55,10 @@ pub fn bundle_ui(
                 register::register_bundle_ui(ui, &mut bundle_input, &register_tx, &bundle_output);
             }
             BundleActions::MintBundle => {
-                // mint::mint_bundle_ui(ui, &mut bundle_input, &mint_tx, &bundle_output);
+                mint::mint_bundle_ui(ui, &mut bundle_input, &mint_tx, &bundle_output);
             }
             BundleActions::BurnBundle => {
-                // burn::burn_bundle_ui(ui, &mut bundle_input, &burn_tx, &bundle_output);
+                burn::burn_bundle_ui(ui, &mut bundle_input, &burn_tx, &bundle_output);
             }
         }
     });
@@ -66,6 +72,8 @@ impl Plugin for BundlePlugin {
             .init_resource::<BundleInputData>()
             .init_resource::<BundleOutputData>()
             .add_plugin(register::RegisterBundlePlugin)
+            .add_plugin(mint::MintBundlePlugin)
+            .add_plugin(burn::BurnBundlePlugin)
             .add_system(bundle_ui);
     }
 }

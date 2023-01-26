@@ -8,6 +8,7 @@ use bevy::{
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bundle::BundlePlugin;
 use class::ClassPlugin;
+use market::MarketPlugin;
 use prelude::*;
 use simula_action::ActionPlugin;
 use simula_camera::orbitcam::*;
@@ -22,6 +23,7 @@ pub mod asset;
 pub mod bag;
 pub mod bundle;
 pub mod class;
+pub mod market;
 pub mod prelude;
 pub mod util;
 
@@ -53,6 +55,7 @@ fn main() {
         .add_plugin(AssetPlugin)
         .add_plugin(BagPlugin)
         .add_plugin(BundlePlugin)
+        .add_plugin(MarketPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();
