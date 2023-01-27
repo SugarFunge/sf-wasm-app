@@ -31,12 +31,23 @@ impl Request<AssetBalanceInput> for AssetBalanceRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetBalanceInputData {
-    pub class_id: u64,
-    pub asset_id: u64,
-    pub account: String,
+    pub class_id: ClassId,
+    pub asset_id: AssetId,
+    pub account: Account,
     pub loading: bool,
+}
+
+impl Default for AssetBalanceInputData {
+    fn default() -> Self {
+        Self {
+            class_id: ClassId::from(0),
+            asset_id: AssetId::from(0),
+            account: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_balance_ui(
@@ -48,11 +59,11 @@ pub fn asset_balance_ui(
     ui.label("Asset Balance");
     ui.separator();
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.balance_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.balance_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.balance_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.balance_input.asset_id).speed(0.1));
     ui.label("Account");
-    ui.text_edit_singleline(&mut asset_input.balance_input.account);
+    ui.text_edit_singleline(&mut *asset_input.balance_input.account);
     ui.separator();
     if asset_input.balance_input.loading {
         ui.separator();
@@ -62,9 +73,9 @@ pub fn asset_balance_ui(
             balance_tx
                 .send(AssetBalanceRequest {
                     input: AssetBalanceInput {
-                        class_id: ClassId::from(asset_input.balance_input.class_id.clone()),
-                        asset_id: AssetId::from(asset_input.balance_input.asset_id.clone()),
-                        account: Account::from(asset_input.balance_input.account.clone()),
+                        class_id: asset_input.balance_input.class_id.clone(),
+                        asset_id: asset_input.balance_input.asset_id.clone(),
+                        account: asset_input.balance_input.account.clone(),
                     },
                 })
                 .unwrap();

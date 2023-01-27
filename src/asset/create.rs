@@ -32,13 +32,25 @@ impl Request<CreateInput> for CreateAssetRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct CreateAssetInputData {
-    pub seed: String,
-    pub class_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
     pub metadata: String,
-    pub asset_id: u64,
+    pub asset_id: AssetId,
     pub loading: bool,
+}
+
+impl Default for CreateAssetInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            metadata: "".to_string(),
+            asset_id: AssetId::from(0),
+            loading: false,
+        }
+    }
 }
 
 pub fn create_asset_ui(
@@ -50,13 +62,13 @@ pub fn create_asset_ui(
     ui.label("Create Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut asset_input.create_input.seed);
+    ui.text_edit_singleline(&mut *asset_input.create_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.create_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.create_input.class_id).speed(0.1));
     ui.label("Metadata");
     ui.text_edit_multiline(&mut asset_input.create_input.metadata);
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.create_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.create_input.asset_id).speed(0.1));
     if asset_input.create_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -66,10 +78,10 @@ pub fn create_asset_ui(
                 .0
                 .send(CreateAssetRequest {
                     input: CreateInput {
-                        seed: Seed::from(asset_input.create_input.seed.clone()),
-                        class_id: ClassId::from(asset_input.create_input.class_id),
+                        seed: asset_input.create_input.seed.clone(),
+                        class_id: asset_input.create_input.class_id,
                         metadata: serde_json::from_str(&asset_input.create_input.metadata).unwrap(),
-                        asset_id: AssetId::from(asset_input.create_input.asset_id.clone()),
+                        asset_id: asset_input.create_input.asset_id.clone(),
                     },
                 })
                 .unwrap();

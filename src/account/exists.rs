@@ -29,10 +29,19 @@ impl Request<AccountExistsInput> for AccountExistsRequest {
     }
 }
 
-#[derive(Resource, Default, Debug, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AccountExistsInputData {
-    pub account: String,
+    pub account: Account,
     pub loading: bool,
+}
+
+impl Default for AccountExistsInputData {
+    fn default() -> Self {
+        Self {
+            account: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn account_exists_ui(
@@ -44,7 +53,7 @@ pub fn account_exists_ui(
     ui.label("Account Exists");
     ui.separator();
     ui.label("Account");
-    ui.text_edit_singleline(&mut account_input.exists_input.account);
+    ui.text_edit_singleline(&mut *account_input.exists_input.account);
     if account_input.exists_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -54,7 +63,7 @@ pub fn account_exists_ui(
                 .0
                 .send(AccountExistsRequest {
                     input: AccountExistsInput {
-                        account: Account::from(account_input.exists_input.account.clone()),
+                        account: account_input.exists_input.account.clone(),
                     },
                 })
                 .unwrap();

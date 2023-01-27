@@ -29,10 +29,19 @@ impl Request<AccountBalanceInput> for AccountBalanceRequest {
     }
 }
 
-#[derive(Resource, Default, Debug, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AccountBalanceInputData {
-    pub account: String,
+    pub account: Account,
     pub loading: bool,
+}
+
+impl Default for AccountBalanceInputData {
+    fn default() -> Self {
+        Self {
+            account: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn account_balance_ui(
@@ -45,7 +54,7 @@ pub fn account_balance_ui(
     ui.separator();
     ui.horizontal(|ui| {
         ui.label("Account");
-        ui.text_edit_singleline(&mut account_input.balance_input.account);
+        ui.text_edit_singleline(&mut *account_input.balance_input.account);
     });
     if account_input.balance_input.loading {
         ui.separator();
@@ -56,7 +65,7 @@ pub fn account_balance_ui(
                 .0
                 .send(AccountBalanceRequest {
                     input: AccountBalanceInput {
-                        account: Account::from(account_input.balance_input.account.clone()),
+                        account: account_input.balance_input.account.clone(),
                     },
                 })
                 .unwrap();

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 use sugarfunge_api_types::{
     bag::{CreateInput, CreateOutput},
-    primitives::{transform_vec_string_to_account, Balance, ClassId, Seed},
+    primitives::{Account, Balance, ClassId, Seed},
 };
 
 use crate::{
@@ -32,13 +32,25 @@ impl Request<CreateInput> for CreateBagRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct CreateBagInputData {
-    pub seed: String,
-    pub class_id: u64,
-    pub owners: Vec<String>,
+    pub seed: Seed,
+    pub class_id: ClassId,
+    pub owners: Vec<Account>,
     pub shares: Vec<u64>,
     pub loading: bool,
+}
+
+impl Default for CreateBagInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            owners: vec![],
+            shares: vec![],
+            loading: false,
+        }
+    }
 }
 
 pub fn create_bag_ui(
@@ -50,18 +62,21 @@ pub fn create_bag_ui(
     ui.label("Create Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bag_input.create_input.seed);
+    ui.text_edit_singleline(&mut *bag_input.create_input.seed);
     ui.label("Class ID");
     ui.add(egui::DragValue::new::<u64>(&mut bag_input.create_input.class_id).speed(0.1));
     ui.label("Owners");
     if ui.button("Add Owner").clicked() {
-        bag_input.create_input.owners.push(String::default());
+        bag_input
+            .create_input
+            .owners
+            .push(Account::from("".to_string()));
     }
     let owners = bag_input.create_input.owners.clone();
     let mut owner_remove_index: Option<usize> = None;
     for (i, _) in owners.iter().enumerate() {
         ui.horizontal(|ui| {
-            ui.text_edit_singleline(&mut bag_input.create_input.owners[i]);
+            ui.text_edit_singleline(&mut *bag_input.create_input.owners[i]);
             if ui.button("Remove").clicked() {
                 owner_remove_index = Some(i);
             }
@@ -85,11 +100,10 @@ pub fn create_bag_ui(
             created_tx
                 .send(CreateBagRequest {
                     input: CreateInput {
-                        seed: Seed::from(bag_input.create_input.seed.clone()),
-                        class_id: ClassId::from(bag_input.create_input.class_id),
-                        owners: transform_vec_string_to_account(
-                            bag_input.create_input.owners.clone(),
-                        ),
+                        seed: bag_input.create_input.seed.clone(),
+                        class_id: bag_input.create_input.class_id,
+                        owners: bag_input.create_input.owners.clone(),
+
                         shares: shares_input,
                     },
                 })

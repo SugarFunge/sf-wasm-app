@@ -38,65 +38,67 @@ pub fn market_ui(
     mut market_input: ResMut<MarketInputData>,
     market_output: Res<MarketOutputData>,
     create_market_tx: Res<InputSender<create_market::CreateMarketRequest>>,
-    // create_market_rate_tx: Res<InputSender<create_market_rate::CreateMarketRateRequest>>,
+    create_market_rate_tx: Res<InputSender<create_market_rate::CreateMarketRateRequest>>,
     // deposit_market_assets_tx: Res<InputSender<deposit_market_assets::DepositAssetsRequest>>,
     // exchange_market_assets_tx: Res<InputSender<exchange_market_assets::ExchangeAssetsRequest>>,
 ) {
-    egui::Window::new("Market").show(&mut ctx.ctx_mut(), |ui| {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut *market_actions, MarketActions::CreateMarket, "Create");
-            ui.selectable_value(
-                &mut *market_actions,
-                MarketActions::CreateMarketRate,
-                "Create Rate",
-            );
-            ui.selectable_value(
-                &mut *market_actions,
-                MarketActions::DepositMarketAssets,
-                "Deposit",
-            );
-            ui.selectable_value(
-                &mut *market_actions,
-                MarketActions::ExchangeMarketAssets,
-                "Exchange",
-            );
-        });
-        ui.separator();
-        match &*market_actions {
-            MarketActions::CreateMarket => {
-                create_market::create_market_ui(
-                    ui,
-                    &mut market_input,
-                    &create_market_tx,
-                    &market_output,
+    egui::Window::new("Market")
+        .scroll2([false, true])
+        .show(&mut ctx.ctx_mut(), |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut *market_actions, MarketActions::CreateMarket, "Create");
+                ui.selectable_value(
+                    &mut *market_actions,
+                    MarketActions::CreateMarketRate,
+                    "Create Rate",
                 );
+                ui.selectable_value(
+                    &mut *market_actions,
+                    MarketActions::DepositMarketAssets,
+                    "Deposit",
+                );
+                ui.selectable_value(
+                    &mut *market_actions,
+                    MarketActions::ExchangeMarketAssets,
+                    "Exchange",
+                );
+            });
+            ui.separator();
+            match &*market_actions {
+                MarketActions::CreateMarket => {
+                    create_market::create_market_ui(
+                        ui,
+                        &mut market_input,
+                        &create_market_tx,
+                        &market_output,
+                    );
+                }
+                MarketActions::CreateMarketRate => {
+                    create_market_rate::create_market_rate_ui(
+                        ui,
+                        &mut market_input,
+                        &create_market_rate_tx,
+                        &market_output,
+                    );
+                }
+                MarketActions::DepositMarketAssets => {
+                    // deposit_market_assets::deposit_market_assets_ui(
+                    //     ui,
+                    //     &mut market_input,
+                    //     &deposit_market_assets_tx,
+                    //     &market_output,
+                    // );
+                }
+                MarketActions::ExchangeMarketAssets => {
+                    // exchange_market_assets::exchange_market_assets_ui(
+                    //     ui,
+                    //     &mut market_input,
+                    //     &exchange_market_assets_tx,
+                    //     &market_output,
+                    // );
+                }
             }
-            MarketActions::CreateMarketRate => {
-                // create_market_rate::create_market_rate_ui(
-                //     ui,
-                //     &mut market_input,
-                //     &create_market_rate_tx,
-                //     &market_output,
-                // );
-            }
-            MarketActions::DepositMarketAssets => {
-                // deposit_market_assets::deposit_market_assets_ui(
-                //     ui,
-                //     &mut market_input,
-                //     &deposit_market_assets_tx,
-                //     &market_output,
-                // );
-            }
-            MarketActions::ExchangeMarketAssets => {
-                // exchange_market_assets::exchange_market_assets_ui(
-                //     ui,
-                //     &mut market_input,
-                //     &exchange_market_assets_tx,
-                //     &market_output,
-                // );
-            }
-        }
-    });
+        });
 }
 
 pub struct MarketPlugin;
@@ -107,6 +109,7 @@ impl Plugin for MarketPlugin {
             .init_resource::<MarketInputData>()
             .init_resource::<MarketOutputData>()
             .add_plugin(create_market::CreateMarketPlugin)
+            .add_plugin(create_market_rate::CreateMarketRatePlugin)
             .add_system(market_ui);
     }
 }

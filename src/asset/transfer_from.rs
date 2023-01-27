@@ -34,15 +34,29 @@ impl Request<TransferFromInput> for AssetTransferFromRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetTransferFromInputData {
-    pub seed: String,
-    pub class_id: u64,
-    pub asset_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
+    pub asset_id: AssetId,
     pub amount: u64,
-    pub from: String,
-    pub to: String,
+    pub from: Account,
+    pub to: Account,
     pub loading: bool,
+}
+
+impl Default for AssetTransferFromInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            asset_id: AssetId::from(0),
+            amount: 0,
+            from: Account::from("".to_string()),
+            to: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_transfer_from_ui(
@@ -54,17 +68,17 @@ pub fn asset_transfer_from_ui(
     ui.label("Transfer Asset From");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut asset_input.transfer_from_input.seed);
+    ui.text_edit_singleline(&mut *asset_input.transfer_from_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.transfer_from_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.transfer_from_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.transfer_from_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.transfer_from_input.asset_id).speed(0.1));
     ui.label("Amount");
     ui.add(egui::DragValue::new::<u64>(&mut asset_input.transfer_from_input.amount).speed(0.1));
     ui.label("From");
-    ui.text_edit_singleline(&mut asset_input.transfer_from_input.from);
+    ui.text_edit_singleline(&mut *asset_input.transfer_from_input.from);
     ui.label("To");
-    ui.text_edit_singleline(&mut asset_input.transfer_from_input.to);
+    ui.text_edit_singleline(&mut *asset_input.transfer_from_input.to);
     ui.separator();
     if asset_input.transfer_from_input.loading {
         ui.separator();
@@ -74,14 +88,14 @@ pub fn asset_transfer_from_ui(
             transfered_tx
                 .send(AssetTransferFromRequest {
                     input: TransferFromInput {
-                        seed: Seed::from(asset_input.transfer_from_input.seed.clone()),
-                        class_id: ClassId::from(asset_input.transfer_from_input.class_id.clone()),
-                        asset_id: AssetId::from(asset_input.transfer_from_input.asset_id.clone()),
+                        seed: asset_input.transfer_from_input.seed.clone(),
+                        class_id: asset_input.transfer_from_input.class_id.clone(),
+                        asset_id: asset_input.transfer_from_input.asset_id.clone(),
                         amount: Balance::from(
                             asset_input.transfer_from_input.amount.clone() as u128
                         ),
-                        from: Account::from(asset_input.transfer_from_input.from.clone()),
-                        to: Account::from(asset_input.transfer_from_input.to.clone()),
+                        from: asset_input.transfer_from_input.from.clone(),
+                        to: asset_input.transfer_from_input.to.clone(),
                     },
                 })
                 .unwrap();

@@ -31,12 +31,23 @@ impl Request<RegisterInput> for RegisterBagRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct RegisterBagInputData {
-    pub seed: String,
-    pub class_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
     pub metadata: String,
     pub loading: bool,
+}
+
+impl Default for RegisterBagInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            metadata: "".to_string(),
+            loading: false,
+        }
+    }
 }
 
 pub fn register_bag_ui(
@@ -48,9 +59,9 @@ pub fn register_bag_ui(
     ui.label("Register Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bag_input.register_input.seed);
+    ui.text_edit_singleline(&mut *bag_input.register_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut bag_input.register_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bag_input.register_input.class_id).speed(0.1));
     ui.label("Metadata");
     ui.text_edit_multiline(&mut bag_input.register_input.metadata);
     if bag_input.register_input.loading {
@@ -61,8 +72,8 @@ pub fn register_bag_ui(
             registered_tx
                 .send(RegisterBagRequest {
                     input: RegisterInput {
-                        seed: Seed::from(bag_input.register_input.seed.clone()),
-                        class_id: ClassId::from(bag_input.register_input.class_id),
+                        seed: bag_input.register_input.seed.clone(),
+                        class_id: bag_input.register_input.class_id,
                         metadata: serde_json::from_str(&bag_input.register_input.metadata).unwrap(),
                     },
                 })

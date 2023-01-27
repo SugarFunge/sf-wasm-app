@@ -32,13 +32,25 @@ impl Request<UpdateMetadataInput> for UpdateMetadataRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct UpdateAssetMetadataInputData {
-    pub seed: String,
-    pub class_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
     pub metadata: String,
-    pub asset_id: u64,
+    pub asset_id: AssetId,
     pub loading: bool,
+}
+
+impl Default for UpdateAssetMetadataInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            metadata: "".to_string(),
+            asset_id: AssetId::from(0),
+            loading: false,
+        }
+    }
 }
 
 pub fn update_asset_metadata_ui(
@@ -50,11 +62,15 @@ pub fn update_asset_metadata_ui(
     ui.label("Update Asset Metadata");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut asset_input.update_metadata_input.seed);
+    ui.text_edit_singleline(&mut *asset_input.update_metadata_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.update_metadata_input.class_id).speed(0.1));
+    ui.add(
+        egui::DragValue::new::<u64>(&mut *asset_input.update_metadata_input.class_id).speed(0.1),
+    );
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.update_metadata_input.asset_id).speed(0.1));
+    ui.add(
+        egui::DragValue::new::<u64>(&mut *asset_input.update_metadata_input.asset_id).speed(0.1),
+    );
     ui.label("Metadata");
     ui.text_edit_multiline(&mut asset_input.update_metadata_input.metadata);
     if asset_input.update_metadata_input.loading {
@@ -66,11 +82,11 @@ pub fn update_asset_metadata_ui(
                 .0
                 .send(UpdateMetadataRequest {
                     input: UpdateMetadataInput {
-                        seed: Seed::from(asset_input.update_metadata_input.seed.clone()),
-                        class_id: ClassId::from(asset_input.update_metadata_input.class_id),
+                        seed: asset_input.update_metadata_input.seed.clone(),
+                        class_id: asset_input.update_metadata_input.class_id,
                         metadata: serde_json::from_str(&asset_input.update_metadata_input.metadata)
                             .unwrap(),
-                        asset_id: AssetId::from(asset_input.update_metadata_input.asset_id),
+                        asset_id: asset_input.update_metadata_input.asset_id,
                     },
                 })
                 .unwrap();

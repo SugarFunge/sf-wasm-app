@@ -30,14 +30,27 @@ impl Request<BurnBundleInput> for BurnBundleRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct BurnBundleInputData {
-    pub seed: String,
-    pub from: String,
-    pub to: String,
-    pub bundle_id: String,
+    pub seed: Seed,
+    pub from: Account,
+    pub to: Account,
+    pub bundle_id: BundleId,
     pub amount: u64,
     pub loading: bool,
+}
+
+impl Default for BurnBundleInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            from: Account::from("".to_string()),
+            to: Account::from("".to_string()),
+            bundle_id: BundleId::from("".to_string()),
+            amount: 0,
+            loading: false,
+        }
+    }
 }
 
 pub fn burn_bundle_ui(
@@ -49,13 +62,13 @@ pub fn burn_bundle_ui(
     ui.label("Burn Bundle");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bundle_input.burn_input.seed);
+    ui.text_edit_singleline(&mut *bundle_input.burn_input.seed);
     ui.label("From");
-    ui.text_edit_singleline(&mut bundle_input.burn_input.from);
+    ui.text_edit_singleline(&mut *bundle_input.burn_input.from);
     ui.label("To");
-    ui.text_edit_singleline(&mut bundle_input.burn_input.to);
+    ui.text_edit_singleline(&mut *bundle_input.burn_input.to);
     ui.label("Bundle ID");
-    ui.text_edit_singleline(&mut bundle_input.burn_input.bundle_id);
+    ui.text_edit_singleline(&mut *bundle_input.burn_input.bundle_id);
     ui.label("Amount");
     ui.label("The Amounts are represented in 10^18 units.");
     ui.add(egui::DragValue::new(&mut bundle_input.burn_input.amount).speed(1.0));
@@ -64,10 +77,10 @@ pub fn burn_bundle_ui(
         burn_tx
             .send(BurnBundleRequest {
                 input: BurnBundleInput {
-                    seed: Seed::from(bundle_input.burn_input.seed.clone()),
-                    from: Account::from(bundle_input.burn_input.from.clone()),
-                    to: Account::from(bundle_input.burn_input.to.clone()),
-                    bundle_id: BundleId::from(bundle_input.burn_input.bundle_id.clone()),
+                    seed: bundle_input.burn_input.seed.clone(),
+                    from: bundle_input.burn_input.from.clone(),
+                    to: bundle_input.burn_input.to.clone(),
+                    bundle_id: bundle_input.burn_input.bundle_id.clone(),
                     amount: Balance::from(
                         (bundle_input.burn_input.amount as u128) * u128::pow(10, 18),
                     ),

@@ -29,10 +29,19 @@ impl Request<SeededAccountInput> for SeededAccountRequest {
     }
 }
 
-#[derive(Resource, Default, Debug, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct SeededAccountInputData {
-    pub seed: String,
+    pub seed: Seed,
     pub loading: bool,
+}
+
+impl Default for SeededAccountInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn seeded_account_ui(
@@ -44,7 +53,7 @@ pub fn seeded_account_ui(
     ui.label("Seeded Account");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut account_input.seeded_input.seed);
+    ui.text_edit_singleline(&mut *account_input.seeded_input.seed);
     if account_input.seeded_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -54,7 +63,7 @@ pub fn seeded_account_ui(
                 .0
                 .send(SeededAccountRequest {
                     input: SeededAccountInput {
-                        seed: Seed::from(account_input.seeded_input.seed.clone()),
+                        seed: account_input.seeded_input.seed.clone(),
                     },
                 })
                 .unwrap();

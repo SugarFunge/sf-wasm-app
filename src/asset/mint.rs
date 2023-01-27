@@ -33,14 +33,27 @@ impl Request<MintInput> for AssetMintRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetMintInputData {
-    pub seed: String,
-    pub class_id: u64,
-    pub asset_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
+    pub asset_id: AssetId,
     pub amount: u64,
-    pub to: String,
+    pub to: Account,
     pub loading: bool,
+}
+
+impl Default for AssetMintInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            asset_id: AssetId::from(0),
+            amount: 0,
+            to: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_mint_ui(
@@ -52,15 +65,15 @@ pub fn asset_mint_ui(
     ui.label("Mint Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut asset_input.mint_input.seed);
+    ui.text_edit_singleline(&mut *asset_input.mint_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.mint_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.mint_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.mint_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.mint_input.asset_id).speed(0.1));
     ui.label("Amount");
     ui.add(egui::DragValue::new::<u64>(&mut asset_input.mint_input.amount).speed(0.1));
     ui.label("To");
-    ui.text_edit_singleline(&mut asset_input.mint_input.to);
+    ui.text_edit_singleline(&mut *asset_input.mint_input.to);
     if asset_input.mint_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -69,10 +82,10 @@ pub fn asset_mint_ui(
             minted_tx
                 .send(AssetMintRequest {
                     input: MintInput {
-                        seed: Seed::from(asset_input.mint_input.seed.clone()),
-                        class_id: ClassId::from(asset_input.mint_input.class_id),
-                        to: Account::from(asset_input.mint_input.to.clone()),
-                        asset_id: AssetId::from(asset_input.mint_input.asset_id),
+                        seed: asset_input.mint_input.seed.clone(),
+                        class_id: asset_input.mint_input.class_id,
+                        to: asset_input.mint_input.to.clone(),
+                        asset_id: asset_input.mint_input.asset_id,
                         amount: Balance::from(asset_input.mint_input.amount as u128),
                     },
                 })

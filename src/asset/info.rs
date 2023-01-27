@@ -30,11 +30,21 @@ impl Request<AssetInfoInput> for AssetInfoRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetInfoInputData {
-    pub asset_id: u64,
-    pub class_id: u64,
+    pub asset_id: AssetId,
+    pub class_id: ClassId,
     pub loading: bool,
+}
+
+impl Default for AssetInfoInputData {
+    fn default() -> Self {
+        Self {
+            asset_id: AssetId::from(0),
+            class_id: ClassId::from(0),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_info_ui(
@@ -46,9 +56,9 @@ pub fn asset_info_ui(
     ui.label("Asset Info");
     ui.separator();
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.info_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.info_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.info_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.info_input.asset_id).speed(0.1));
     if asset_input.update_metadata_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -58,8 +68,8 @@ pub fn asset_info_ui(
                 .0
                 .send(AssetInfoRequest {
                     input: AssetInfoInput {
-                        asset_id: AssetId::from(asset_input.info_input.asset_id),
-                        class_id: ClassId::from(asset_input.info_input.class_id),
+                        asset_id: asset_input.info_input.asset_id,
+                        class_id: asset_input.info_input.class_id,
                     },
                 })
                 .unwrap();

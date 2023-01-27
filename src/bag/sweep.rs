@@ -31,12 +31,23 @@ impl Request<SweepInput> for SweepBagRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct SweepBagInputData {
-    pub seed: String,
-    pub bag: String,
-    pub to: String,
+    pub seed: Seed,
+    pub bag: Account,
+    pub to: Account,
     pub loading: bool,
+}
+
+impl Default for SweepBagInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            bag: Account::from("".to_string()),
+            to: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn sweep_bag_ui(
@@ -48,11 +59,11 @@ pub fn sweep_bag_ui(
     ui.label("Sweep Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bag_input.sweep_input.seed);
+    ui.text_edit_singleline(&mut *bag_input.sweep_input.seed);
     ui.label("Bag");
-    ui.text_edit_singleline(&mut bag_input.sweep_input.bag);
+    ui.text_edit_singleline(&mut *bag_input.sweep_input.bag);
     ui.label("To");
-    ui.text_edit_singleline(&mut bag_input.sweep_input.to);
+    ui.text_edit_singleline(&mut *bag_input.sweep_input.to);
     if bag_input.sweep_input.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
@@ -61,9 +72,9 @@ pub fn sweep_bag_ui(
             sweep_tx
                 .send(SweepBagRequest {
                     input: SweepInput {
-                        seed: Seed::from(bag_input.sweep_input.seed.clone()),
-                        bag: Account::from(bag_input.sweep_input.bag.clone()),
-                        to: Account::from(bag_input.sweep_input.to.clone()),
+                        seed: bag_input.sweep_input.seed.clone(),
+                        bag: bag_input.sweep_input.bag.clone(),
+                        to: bag_input.sweep_input.to.clone(),
                     },
                 })
                 .unwrap();

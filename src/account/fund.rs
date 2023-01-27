@@ -33,8 +33,8 @@ impl Request<FundAccountInput> for FundAccountRequest {
 
 #[derive(Resource, Debug, Clone)]
 pub struct FundAccountInputData {
-    pub seed: String,
-    pub to: String,
+    pub seed: Seed,
+    pub to: Account,
     pub amount: u64,
     pub loading: bool,
 }
@@ -42,8 +42,8 @@ pub struct FundAccountInputData {
 impl Default for FundAccountInputData {
     fn default() -> Self {
         Self {
-            seed: "//Alice".to_string(),
-            to: "".to_string(),
+            seed: Seed::from("//Alice".to_string()),
+            to: Account::from("".to_string()),
             amount: 1,
             loading: false,
         }
@@ -59,9 +59,9 @@ pub fn account_fund_ui(
     ui.label("Fund Account");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut account_input.fund_input.seed);
+    ui.text_edit_singleline(&mut *account_input.fund_input.seed);
     ui.label("To");
-    ui.text_edit_singleline(&mut account_input.fund_input.to);
+    ui.text_edit_singleline(&mut *account_input.fund_input.to);
     ui.label("Amount");
     ui.label("The Amount is represented in 10^18 units.");
     ui.add(egui::DragValue::new::<u64>(&mut account_input.fund_input.amount.into()).speed(0.1));
@@ -74,8 +74,8 @@ pub fn account_fund_ui(
                 .0
                 .send(FundAccountRequest {
                     input: FundAccountInput {
-                        seed: Seed::from(account_input.fund_input.seed.clone()),
-                        to: Account::from(account_input.fund_input.to.clone()),
+                        seed: account_input.fund_input.seed.clone(),
+                        to: account_input.fund_input.to.clone(),
                         amount: Balance::from(
                             (account_input.fund_input.amount as u128) * (u128::pow(10, 18)),
                         ),

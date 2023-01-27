@@ -30,14 +30,27 @@ impl Request<DepositInput> for DepositBagRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct DepositBagInputData {
-    pub seed: String,
-    pub bag: String,
+    pub seed: Seed,
+    pub bag: Account,
     pub class_ids: Vec<u64>,
     pub asset_ids: Vec<Vec<u64>>,
     pub amounts: Vec<Vec<u64>>,
     pub loading: bool,
+}
+
+impl Default for DepositBagInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            bag: Account::from("".to_string()),
+            class_ids: vec![],
+            asset_ids: vec![],
+            amounts: vec![],
+            loading: false,
+        }
+    }
 }
 
 pub fn deposit_bag_ui(
@@ -49,9 +62,9 @@ pub fn deposit_bag_ui(
     ui.label("Deposit Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bag_input.deposit_input.seed);
+    ui.text_edit_singleline(&mut *bag_input.deposit_input.seed);
     ui.label("Bag");
-    ui.text_edit_singleline(&mut bag_input.deposit_input.bag);
+    ui.text_edit_singleline(&mut *bag_input.deposit_input.bag);
     ui.label("Class IDs");
     vec_u64_input_ui(ui, &mut bag_input.deposit_input.class_ids);
     ui.label("Asset IDs");
@@ -73,8 +86,8 @@ pub fn deposit_bag_ui(
             registered_tx
                 .send(DepositBagRequest {
                     input: DepositInput {
-                        seed: Seed::from(bag_input.deposit_input.seed.clone()),
-                        bag: Account::from(bag_input.deposit_input.bag.clone()),
+                        seed: bag_input.deposit_input.seed.clone(),
+                        bag: bag_input.deposit_input.bag.clone(),
                         class_ids,
                         asset_ids,
                         amounts,

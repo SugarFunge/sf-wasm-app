@@ -33,14 +33,27 @@ impl Request<BurnInput> for AssetBurnRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetBurnInputData {
-    pub seed: String,
-    pub class_id: u64,
-    pub asset_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
+    pub asset_id: AssetId,
     pub amount: u64,
-    pub from: String,
+    pub from: Account,
     pub loading: bool,
+}
+
+impl Default for AssetBurnInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            asset_id: AssetId::from(0),
+            amount: 0,
+            from: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_burn_ui(
@@ -52,15 +65,15 @@ pub fn asset_burn_ui(
     ui.label("Burn Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut asset_input.burn_input.seed);
+    ui.text_edit_singleline(&mut *asset_input.burn_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.burn_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.burn_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.burn_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.burn_input.asset_id).speed(0.1));
     ui.label("Amount");
     ui.add(egui::DragValue::new::<u64>(&mut asset_input.burn_input.amount).speed(0.1));
     ui.label("From");
-    ui.text_edit_singleline(&mut asset_input.burn_input.from);
+    ui.text_edit_singleline(&mut *asset_input.burn_input.from);
     ui.separator();
     if asset_input.burn_input.loading {
         ui.separator();
@@ -70,11 +83,11 @@ pub fn asset_burn_ui(
             burned_tx
                 .send(AssetBurnRequest {
                     input: BurnInput {
-                        seed: Seed::from(asset_input.burn_input.seed.clone()),
-                        class_id: ClassId::from(asset_input.burn_input.class_id),
-                        asset_id: AssetId::from(asset_input.burn_input.asset_id),
+                        seed: asset_input.burn_input.seed.clone(),
+                        class_id: asset_input.burn_input.class_id,
+                        asset_id: asset_input.burn_input.asset_id,
                         amount: Balance::from(asset_input.burn_input.amount as u128),
-                        from: Account::from(asset_input.burn_input.from.clone()),
+                        from: asset_input.burn_input.from.clone(),
                     },
                 })
                 .unwrap();

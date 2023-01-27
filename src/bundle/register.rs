@@ -34,16 +34,31 @@ impl Request<RegisterBundleInput> for RegisterBundleRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct RegisterBundleInputData {
-    pub seed: String,
-    pub class_id: u64,
+    pub seed: Seed,
+    pub class_id: ClassId,
     pub metadata: String,
-    pub asset_id: u64,
+    pub asset_id: AssetId,
     pub schema_class_ids: Vec<u64>,
     pub schema_asset_ids: Vec<Vec<u64>>,
     pub schema_amounts: Vec<Vec<u64>>,
     pub loading: bool,
+}
+
+impl Default for RegisterBundleInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            class_id: ClassId::from(0),
+            metadata: "".to_string(),
+            asset_id: AssetId::from(0),
+            schema_class_ids: vec![],
+            schema_asset_ids: vec![],
+            schema_amounts: vec![],
+            loading: false,
+        }
+    }
 }
 
 pub fn register_bundle_ui(
@@ -55,11 +70,11 @@ pub fn register_bundle_ui(
     ui.label("Register Bundle");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut bundle_input.register_input.seed);
+    ui.text_edit_singleline(&mut *bundle_input.register_input.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut bundle_input.register_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bundle_input.register_input.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut bundle_input.register_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bundle_input.register_input.asset_id).speed(0.1));
     ui.label("Metadata");
     ui.text_edit_multiline(&mut bundle_input.register_input.metadata);
     ui.label("Schema Class IDs");
@@ -90,11 +105,11 @@ pub fn register_bundle_ui(
         registered_tx
             .send(RegisterBundleRequest {
                 input: RegisterBundleInput {
-                    seed: Seed::from(bundle_input.register_input.seed.clone()),
-                    class_id: ClassId::from(bundle_input.register_input.class_id.clone()),
+                    seed: bundle_input.register_input.seed.clone(),
+                    class_id: bundle_input.register_input.class_id.clone(),
                     metadata: serde_json::from_str(&bundle_input.register_input.metadata.clone())
                         .unwrap(),
-                    asset_id: AssetId::from(bundle_input.register_input.asset_id.clone()),
+                    asset_id: bundle_input.register_input.asset_id.clone(),
                     schema: BundleSchema {
                         class_ids,
                         asset_ids,

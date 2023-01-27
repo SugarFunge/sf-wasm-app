@@ -27,11 +27,21 @@ impl Request<CreateMarketInput> for CreateMarketRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct CreateMarketInputData {
-    pub seed: String,
-    pub market_id: u64,
+    pub seed: Seed,
+    pub market_id: MarketId,
     pub loading: bool,
+}
+
+impl Default for CreateMarketInputData {
+    fn default() -> Self {
+        Self {
+            seed: Seed::from("".to_string()),
+            market_id: MarketId::from(0),
+            loading: false,
+        }
+    }
 }
 
 pub fn create_market_ui(
@@ -41,16 +51,16 @@ pub fn create_market_ui(
     market_output: &Res<MarketOutputData>,
 ) {
     ui.label("Seed");
-    ui.text_edit_singleline(&mut market_input.create_market_input.seed);
+    ui.text_edit_singleline(&mut *market_input.create_market_input.seed);
     ui.label("Market ID");
-    ui.add(egui::DragValue::new(&mut market_input.create_market_input.market_id).speed(1.0));
+    ui.add(egui::DragValue::new(&mut *market_input.create_market_input.market_id).speed(1.0));
     ui.separator();
     if ui.button("Create").clicked() {
         create_tx
             .send(CreateMarketRequest {
                 input: CreateMarketInput {
-                    seed: Seed::from(market_input.create_market_input.seed.clone()),
-                    market_id: MarketId::from(market_input.create_market_input.market_id),
+                    seed: market_input.create_market_input.seed.clone(),
+                    market_id: market_input.create_market_input.market_id,
                 },
             })
             .unwrap();

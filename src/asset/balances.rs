@@ -30,12 +30,23 @@ impl Request<AssetBalancesInput> for AssetBalancesRequest {
     }
 }
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetBalancesInputData {
-    pub class_id: u64,
+    pub class_id: ClassId,
     pub class_id_enabled: bool,
-    pub account: String,
+    pub account: Account,
     pub loading: bool,
+}
+
+impl Default for AssetBalancesInputData {
+    fn default() -> Self {
+        Self {
+            class_id: ClassId::from(0),
+            class_id_enabled: false,
+            account: Account::from("".to_string()),
+            loading: false,
+        }
+    }
 }
 
 pub fn asset_balances_ui(
@@ -47,14 +58,14 @@ pub fn asset_balances_ui(
     ui.label("Asset Balances");
     ui.separator();
     ui.label("Account");
-    ui.text_edit_singleline(&mut asset_input.balances_input.account);
+    ui.text_edit_singleline(&mut *asset_input.balances_input.account);
     ui.checkbox(
         &mut asset_input.balances_input.class_id_enabled,
         "Enable Class ID",
     );
     if asset_input.balances_input.class_id_enabled {
         ui.label("Class ID");
-        ui.add(egui::DragValue::new::<u64>(&mut asset_input.balances_input.class_id).speed(0.1));
+        ui.add(egui::DragValue::new::<u64>(&mut *asset_input.balances_input.class_id).speed(0.1));
     }
     ui.separator();
     if asset_input.balances_input.loading {
@@ -66,11 +77,11 @@ pub fn asset_balances_ui(
                 .send(AssetBalancesRequest {
                     input: AssetBalancesInput {
                         class_id: if asset_input.balances_input.class_id_enabled {
-                            Some(ClassId::from(asset_input.balances_input.class_id))
+                            Some(asset_input.balances_input.class_id)
                         } else {
                             None
                         },
-                        account: Account::from(asset_input.balances_input.account.clone()),
+                        account: asset_input.balances_input.account.clone(),
                     },
                 })
                 .unwrap();
