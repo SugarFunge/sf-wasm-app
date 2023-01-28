@@ -17,6 +17,7 @@ use simula_viz::{
     grid::{Grid, GridBundle, GridPlugin},
     lines::{LineMesh, LinesMaterial, LinesPlugin},
 };
+use validator::ValidatorPlugin;
 
 pub mod account;
 pub mod asset;
@@ -25,6 +26,7 @@ pub mod bundle;
 pub mod class;
 pub mod market;
 pub mod prelude;
+pub mod validator;
 pub mod util;
 
 fn main() {
@@ -56,6 +58,7 @@ fn main() {
         .add_plugin(BagPlugin)
         .add_plugin(BundlePlugin)
         .add_plugin(MarketPlugin)
+        .add_plugin(ValidatorPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();

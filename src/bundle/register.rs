@@ -86,7 +86,6 @@ pub fn register_bundle_ui(
         "Asset ID",
     );
     ui.label("Schema Amounts");
-    ui.label("The Amounts are represented in 10^18 units.");
     vec_of_vec_u64_input_ui(
         ui,
         &mut bundle_input.register_input.schema_amounts,

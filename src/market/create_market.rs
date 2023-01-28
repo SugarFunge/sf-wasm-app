@@ -50,21 +50,28 @@ pub fn create_market_ui(
     create_tx: &Res<InputSender<CreateMarketRequest>>,
     market_output: &Res<MarketOutputData>,
 ) {
+    ui.label("Create");
+    ui.separator();
     ui.label("Seed");
     ui.text_edit_singleline(&mut *market_input.create_market_input.seed);
     ui.label("Market ID");
     ui.add(egui::DragValue::new(&mut *market_input.create_market_input.market_id).speed(1.0));
     ui.separator();
-    if ui.button("Create").clicked() {
-        create_tx
-            .send(CreateMarketRequest {
-                input: CreateMarketInput {
-                    seed: market_input.create_market_input.seed.clone(),
-                    market_id: market_input.create_market_input.market_id,
-                },
-            })
-            .unwrap();
-        market_input.create_market_input.loading = true;
+    if market_input.create_market_input.loading {
+        ui.separator();
+        ui.add(egui::Spinner::default());
+    } else {
+        if ui.button("Create").clicked() {
+            create_tx
+                .send(CreateMarketRequest {
+                    input: CreateMarketInput {
+                        seed: market_input.create_market_input.seed.clone(),
+                        market_id: market_input.create_market_input.market_id,
+                    },
+                })
+                .unwrap();
+            market_input.create_market_input.loading = true;
+        }
     }
     if let Some(output) = &market_output.create_market_output {
         ui.separator();

@@ -56,7 +56,7 @@ impl Default for CreateAssetInputData {
 pub fn create_asset_ui(
     ui: &mut egui::Ui,
     asset_input: &mut ResMut<AssetInputData>,
-    created_tx: &Res<InputSender<CreateAssetRequest>>,
+    create_tx: &Res<InputSender<CreateAssetRequest>>,
     asset_output: &Res<AssetOutputData>,
 ) {
     ui.label("Create Asset");
@@ -74,7 +74,7 @@ pub fn create_asset_ui(
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Create").clicked() {
-            created_tx
+            create_tx
                 .0
                 .send(CreateAssetRequest {
                     input: CreateInput {

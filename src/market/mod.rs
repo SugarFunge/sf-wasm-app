@@ -6,6 +6,8 @@ use crate::prelude::*;
 
 pub mod create_market;
 pub mod create_market_rate;
+pub mod deposit_market_assets;
+pub mod exchange_market_assets;
 
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
 pub enum MarketActions {
@@ -20,8 +22,8 @@ pub enum MarketActions {
 pub struct MarketInputData {
     create_market_input: create_market::CreateMarketInputData,
     create_market_rate_input: create_market_rate::CreateMarketRateInputData,
-    // deposit_market_assets_input: deposit_market_assets::DepositMarketAssetsInputData,
-    // exchange_market_assets_input: exchange_market_assets::ExchangeMarketAssetsInputData,
+    deposit_market_assets_input: deposit_market_assets::DepositMarketAssetsInputData,
+    exchange_market_assets_input: exchange_market_assets::ExchangeMarketAssetsInputData,
 }
 
 #[derive(Resource, Default, Debug)]
@@ -39,8 +41,8 @@ pub fn market_ui(
     market_output: Res<MarketOutputData>,
     create_market_tx: Res<InputSender<create_market::CreateMarketRequest>>,
     create_market_rate_tx: Res<InputSender<create_market_rate::CreateMarketRateRequest>>,
-    // deposit_market_assets_tx: Res<InputSender<deposit_market_assets::DepositAssetsRequest>>,
-    // exchange_market_assets_tx: Res<InputSender<exchange_market_assets::ExchangeAssetsRequest>>,
+    deposit_market_assets_tx: Res<InputSender<deposit_market_assets::DepositMarketAssetsRequest>>,
+    exchange_market_assets_tx: Res<InputSender<exchange_market_assets::ExchangeMarketAssetsRequest>>,
 ) {
     egui::Window::new("Market")
         .scroll2([false, true])
@@ -82,20 +84,20 @@ pub fn market_ui(
                     );
                 }
                 MarketActions::DepositMarketAssets => {
-                    // deposit_market_assets::deposit_market_assets_ui(
-                    //     ui,
-                    //     &mut market_input,
-                    //     &deposit_market_assets_tx,
-                    //     &market_output,
-                    // );
+                    deposit_market_assets::deposit_market_assets_ui(
+                        ui,
+                        &mut market_input,
+                        &deposit_market_assets_tx,
+                        &market_output,
+                    );
                 }
                 MarketActions::ExchangeMarketAssets => {
-                    // exchange_market_assets::exchange_market_assets_ui(
-                    //     ui,
-                    //     &mut market_input,
-                    //     &exchange_market_assets_tx,
-                    //     &market_output,
-                    // );
+                    exchange_market_assets::exchange_market_assets_ui(
+                        ui,
+                        &mut market_input,
+                        &exchange_market_assets_tx,
+                        &market_output,
+                    );
                 }
             }
         });
@@ -110,6 +112,8 @@ impl Plugin for MarketPlugin {
             .init_resource::<MarketOutputData>()
             .add_plugin(create_market::CreateMarketPlugin)
             .add_plugin(create_market_rate::CreateMarketRatePlugin)
+            .add_plugin(deposit_market_assets::DepositMarketAssetsPlugin)
+            .add_plugin(exchange_market_assets::ExchangeMarketAssetsPlugin)
             .add_system(market_ui);
     }
 }

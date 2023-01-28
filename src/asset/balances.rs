@@ -94,7 +94,7 @@ pub fn asset_balances_ui(
         ui.separator();
         for (i, balance) in balances_output.balances.iter().enumerate() {
             ui.label(format!("Amount [{}]", i + 1));
-            ui.text_edit_singleline(&mut format!("{:?}", balance.amount));
+            ui.text_edit_singleline(&mut u128::from(balance.amount).to_string());
             ui.separator();
         }
     }

@@ -70,7 +70,6 @@ pub fn mint_bundle_ui(
     ui.label("Bundle ID");
     ui.text_edit_singleline(&mut *bundle_input.mint_input.bundle_id);
     ui.label("Amount");
-    ui.label("The Amounts are represented in 10^18 units.");
     ui.add(egui::DragValue::new(&mut bundle_input.mint_input.amount).speed(1.0));
     ui.separator();
     if ui.button("Mint").clicked() {
@@ -81,9 +80,7 @@ pub fn mint_bundle_ui(
                     from: bundle_input.mint_input.from.clone(),
                     to: bundle_input.mint_input.to.clone(),
                     bundle_id: bundle_input.mint_input.bundle_id.clone(),
-                    amount: Balance::from(
-                        (bundle_input.mint_input.amount as u128) * u128::pow(10, 18),
-                    ),
+                    amount: Balance::from(bundle_input.mint_input.amount as u128),
                 },
             })
             .unwrap();

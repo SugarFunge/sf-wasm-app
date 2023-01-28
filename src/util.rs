@@ -159,7 +159,7 @@ pub fn transform_doublevec_of_u64_to_balance(input: Vec<Vec<u64>>) -> Vec<Vec<Ba
         .map(|amounts| {
             amounts
                 .iter()
-                .map(|amount| Balance::from(u128::from(*amount) * (u128::pow(10, 18))))
+                .map(|amount| Balance::from(u128::from(*amount)))
                 .collect()
         })
         .collect()

@@ -81,7 +81,7 @@ pub fn create_class_ui(
         ui.separator();
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
-        ui.label("ClassId");
+        ui.label("Class ID");
         ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
     }
 }

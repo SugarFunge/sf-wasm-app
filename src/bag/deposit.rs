@@ -70,7 +70,6 @@ pub fn deposit_bag_ui(
     ui.label("Asset IDs");
     vec_of_vec_u64_input_ui(ui, &mut bag_input.deposit_input.asset_ids, "Asset ID");
     ui.label("Amounts");
-    ui.label("The Amounts are represented in 10^18 units.");
     vec_of_vec_u64_input_ui(ui, &mut bag_input.deposit_input.amounts, "Amount");
     if bag_input.deposit_input.loading {
         ui.separator();
