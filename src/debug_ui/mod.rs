@@ -1,15 +1,13 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
 
-use crate::{
-    account::{account_ui, AccountUi, AccountPlugin},
-    asset::{asset_ui, AssetUi, AssetPlugin},
-    bag::{bag_ui, BagUi, BagPlugin},
-    bundle::{bundle_ui, BundleUi, BundlePlugin},
-    class::{class_ui, ClassUi, ClassPlugin},
-    market::{market_ui, MarketUi, MarketPlugin},
-    validator::{validator_ui, ValidatorUi, ValidatorPlugin},
-};
+pub mod account;
+pub mod asset;
+pub mod bag;
+pub mod bundle;
+pub mod class;
+pub mod market;
+pub mod validator;
 
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
 pub enum DebugUiActions {
@@ -26,13 +24,13 @@ pub enum DebugUiActions {
 pub fn debug_ui(
     mut ctx: ResMut<EguiContext>,
     mut debug_actions: ResMut<DebugUiActions>,
-    mut asset: ResMut<AssetUi>,
-    mut account: ResMut<AccountUi>,
-    mut class: ResMut<ClassUi>,
-    mut bag: ResMut<BagUi>,
-    mut bundle: ResMut<BundleUi>,
-    mut market: ResMut<MarketUi>,
-    mut validator: ResMut<ValidatorUi>,
+    mut asset: ResMut<asset::AssetUi>,
+    mut account: ResMut<account::AccountUi>,
+    mut class: ResMut<class::ClassUi>,
+    mut bag: ResMut<bag::BagUi>,
+    mut bundle: ResMut<bundle::BundleUi>,
+    mut market: ResMut<market::MarketUi>,
+    mut validator: ResMut<validator::ValidatorUi>,
 ) {
     egui::Window::new("SugarFunge Debug UI")
         .scroll2([false, true])
@@ -48,13 +46,13 @@ pub fn debug_ui(
             });
             ui.separator();
             match &*debug_actions {
-                DebugUiActions::Account => account_ui(ui, &mut account),
-                DebugUiActions::Class => class_ui(ui, &mut class),
-                DebugUiActions::Asset => asset_ui(ui, &mut asset),
-                DebugUiActions::Bag => bag_ui(ui, &mut bag),
-                DebugUiActions::Bundle => bundle_ui(ui, &mut bundle),
-                DebugUiActions::Market => market_ui(ui, &mut market),
-                DebugUiActions::Validator => validator_ui(ui, &mut validator),
+                DebugUiActions::Account => account::account_ui(ui, &mut account),
+                DebugUiActions::Class => class::class_ui(ui, &mut class),
+                DebugUiActions::Asset => asset::asset_ui(ui, &mut asset),
+                DebugUiActions::Bag => bag::bag_ui(ui, &mut bag),
+                DebugUiActions::Bundle => bundle::bundle_ui(ui, &mut bundle),
+                DebugUiActions::Market => market::market_ui(ui, &mut market),
+                DebugUiActions::Validator => validator::validator_ui(ui, &mut validator),
             }
         });
 }
@@ -64,13 +62,13 @@ pub struct DebugUiPlugin;
 impl Plugin for DebugUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugUiActions>()
-            .add_plugin(AccountPlugin)
-            .add_plugin(ClassPlugin)
-            .add_plugin(AssetPlugin)
-            .add_plugin(BagPlugin)
-            .add_plugin(BundlePlugin)
-            .add_plugin(MarketPlugin)
-            .add_plugin(ValidatorPlugin)
+            .add_plugin(account::AccountPlugin)
+            .add_plugin(class::ClassPlugin)
+            .add_plugin(asset::AssetPlugin)
+            .add_plugin(bag::BagPlugin)
+            .add_plugin(bundle::BundlePlugin)
+            .add_plugin(market::MarketPlugin)
+            .add_plugin(validator::ValidatorPlugin)
             .add_system(debug_ui);
     }
 }

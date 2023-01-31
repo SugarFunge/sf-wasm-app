@@ -13,16 +13,9 @@ use simula_viz::{
     lines::{LineMesh, LinesMaterial, LinesPlugin},
 };
 
-pub mod account;
-pub mod asset;
-pub mod bag;
-pub mod bundle;
-pub mod class;
 pub mod debug_ui;
-pub mod market;
 pub mod prelude;
 pub mod util;
-pub mod validator;
 
 fn main() {
     let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap());
