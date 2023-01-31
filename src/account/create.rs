@@ -1,13 +1,11 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::account::CreateAccountOutput;
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AccountInputData, AccountOutputData};
+use super::AccountUi;
 
 #[derive(Debug)]
 pub struct CreateAccountRequest;
@@ -22,29 +20,51 @@ impl Request<()> for CreateAccountRequest {
     }
 }
 
+#[derive(Resource)]
+pub struct CreateAccountChannel {
+    pub input_tx: InputSender<CreateAccountRequest>,
+    pub input_rx: InputReceiver<CreateAccountRequest>,
+    pub output_tx: OutputSender<CreateAccountOutput>,
+    pub output_rx: OutputReceiver<CreateAccountOutput>,
+}
+
+impl Default for CreateAccountChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<CreateAccountRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<CreateAccountOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
+    }
+}
+
 #[derive(Resource, Debug, Default, Clone)]
 pub struct CreateAccountInputData {
     pub loading: bool,
 }
 
-pub fn create_account_ui(
-    ui: &mut egui::Ui,
-    account_input: &mut ResMut<AccountInputData>,
-    created_tx: &Res<InputSender<CreateAccountRequest>>,
-    account_output: &Res<AccountOutputData>,
-) {
+pub fn create_account_ui(ui: &mut egui::Ui, account: &mut ResMut<AccountUi>) {
     ui.label("Create Account");
     ui.separator();
-    if account_input.create_input.loading {
+    if account.data.input.create.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Create").clicked() {
-            created_tx.0.send(CreateAccountRequest).unwrap();
-            account_input.create_input.loading = true;
+            account
+                .channels
+                .create
+                .input_tx
+                .0
+                .send(CreateAccountRequest)
+                .unwrap();
+            account.data.input.create.loading = true;
         }
     }
-    if let Some(output) = &account_output.create_output {
+    if let Some(output) = &account.data.output.create {
         ui.separator();
         ui.label("Account");
         ui.text_edit_singleline(&mut output.account.as_str());
@@ -53,25 +73,25 @@ pub fn create_account_ui(
     }
 }
 
-pub fn handle_create_response(
-    mut account_output: ResMut<AccountOutputData>,
-    mut account_input: ResMut<AccountInputData>,
-    created_rx: Res<OutputReceiver<CreateAccountOutput>>,
-) {
-    if let Ok(created_result) = created_rx.0.try_recv() {
+pub fn handle_create_response(mut account: ResMut<AccountUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(created_result) = account.channels.create.output_rx.0.try_recv() {
         if let Some(created) = created_result {
-            account_output.create_output = Some(created);
+            account.data.output.create = Some(created);
         }
-        account_input.create_input.loading = false;
+        account.data.input.create.loading = false;
     }
+
+    request_handler::<CreateAccountRequest, (), CreateAccountOutput>(
+        tokio_runtime.runtime.clone(),
+        account.channels.create.input_rx.clone(),
+        account.channels.create.output_tx.clone(),
+    );
 }
 
 pub struct AccountCreatePlugin;
 
 impl Plugin for AccountCreatePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<CreateAccountRequest, CreateAccountOutput>)
-            .add_system(request_handler::<CreateAccountRequest, (), CreateAccountOutput>)
-            .add_system(handle_create_response);
+        app.add_system(handle_create_response);
     }
 }

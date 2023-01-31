@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bag::{SweepInput, SweepOutput},
     primitives::{Account, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{BagInputData, BagOutputData};
+use super::BagUi;
 
 #[derive(Debug)]
 pub struct SweepBagRequest {
@@ -28,6 +26,27 @@ impl Request<SweepInput> for SweepBagRequest {
             bag: self.input.bag.clone(),
             to: self.input.to.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct SweepBagChannel {
+    pub input_tx: InputSender<SweepBagRequest>,
+    pub input_rx: InputReceiver<SweepBagRequest>,
+    pub output_tx: OutputSender<SweepOutput>,
+    pub output_rx: OutputReceiver<SweepOutput>,
+}
+
+impl Default for SweepBagChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<SweepBagRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<SweepOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -50,38 +69,36 @@ impl Default for SweepBagInputData {
     }
 }
 
-pub fn sweep_bag_ui(
-    ui: &mut egui::Ui,
-    bag_input: &mut ResMut<BagInputData>,
-    sweep_tx: &Res<InputSender<SweepBagRequest>>,
-    bag_output: &Res<BagOutputData>,
-) {
+pub fn sweep_bag_ui(ui: &mut egui::Ui, bag: &mut ResMut<BagUi>) {
     ui.label("Sweep Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bag_input.sweep_input.seed);
+    ui.text_edit_singleline(&mut *bag.data.input.sweep.seed);
     ui.label("Bag");
-    ui.text_edit_singleline(&mut *bag_input.sweep_input.bag);
+    ui.text_edit_singleline(&mut *bag.data.input.sweep.bag);
     ui.label("To");
-    ui.text_edit_singleline(&mut *bag_input.sweep_input.to);
-    if bag_input.sweep_input.loading {
+    ui.text_edit_singleline(&mut *bag.data.input.sweep.to);
+    if bag.data.input.sweep.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Sweep").clicked() {
-            sweep_tx
+            bag.channels
+                .sweep
+                .input_tx
+                .0
                 .send(SweepBagRequest {
                     input: SweepInput {
-                        seed: bag_input.sweep_input.seed.clone(),
-                        bag: bag_input.sweep_input.bag.clone(),
-                        to: bag_input.sweep_input.to.clone(),
+                        seed: bag.data.input.sweep.seed.clone(),
+                        bag: bag.data.input.sweep.bag.clone(),
+                        to: bag.data.input.sweep.to.clone(),
                     },
                 })
                 .unwrap();
-            bag_input.sweep_input.loading = true;
+            bag.data.input.sweep.loading = true;
         }
     }
-    if let Some(output) = &bag_output.sweep_output {
+    if let Some(output) = &bag.data.output.sweep {
         ui.separator();
         ui.label("Bag");
         ui.text_edit_singleline(&mut output.bag.as_str());
@@ -92,25 +109,25 @@ pub fn sweep_bag_ui(
     }
 }
 
-pub fn handle_sweep_response(
-    mut bag_output: ResMut<BagOutputData>,
-    mut bag_input: ResMut<BagInputData>,
-    swept_rx: Res<OutputReceiver<SweepOutput>>,
-) {
-    if let Ok(swept_result) = swept_rx.0.try_recv() {
+pub fn handle_sweep_response(mut bag: ResMut<BagUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(swept_result) = bag.channels.sweep.output_rx.0.try_recv() {
         if let Some(swept) = swept_result {
-            bag_output.sweep_output = Some(swept);
+            bag.data.output.sweep = Some(swept);
         }
-        bag_input.sweep_input.loading = false;
+        bag.data.input.sweep.loading = false;
     }
+
+    request_handler::<SweepBagRequest, SweepInput, SweepOutput>(
+        tokio_runtime.runtime.clone(),
+        bag.channels.sweep.input_rx.clone(),
+        bag.channels.sweep.output_tx.clone(),
+    );
 }
 
 pub struct SweepBagPlugin;
 
 impl Plugin for SweepBagPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<SweepBagRequest, SweepOutput>)
-            .add_system(request_handler::<SweepBagRequest, SweepInput, SweepOutput>)
-            .add_system(handle_sweep_response);
+        app.add_system(handle_sweep_response);
     }
 }

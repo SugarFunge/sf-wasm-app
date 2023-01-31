@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     market::{DepositAssetsInput, DepositAssetsOutput, RateBalance},
     primitives::{Balance, MarketId, Seed},
 };
 
-use crate::{prelude::*, util::*};
+use crate::{prelude::*, util::request_handler};
 
-use super::{MarketInputData, MarketOutputData};
+use super::MarketUi;
 
 pub struct DepositMarketAssetsRequest {
     pub input: DepositAssetsInput,
@@ -24,6 +25,27 @@ impl Request<DepositAssetsInput> for DepositMarketAssetsRequest {
             market_rate_id: self.input.market_rate_id.clone(),
             amount: self.input.amount.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct DepositMarketAssetsChannel {
+    pub input_tx: InputSender<DepositMarketAssetsRequest>,
+    pub input_rx: InputReceiver<DepositMarketAssetsRequest>,
+    pub output_tx: OutputSender<DepositAssetsOutput>,
+    pub output_rx: OutputReceiver<DepositAssetsOutput>,
+}
+
+impl Default for DepositMarketAssetsChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<DepositMarketAssetsRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<DepositAssetsOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -68,51 +90,52 @@ pub fn rate_balances_ui(ui: &mut egui::Ui, rate_balances: &Vec<RateBalance>) {
     }
 }
 
-pub fn deposit_market_assets_ui(
-    ui: &mut egui::Ui,
-    market_input: &mut ResMut<MarketInputData>,
-    deposit_tx: &Res<InputSender<DepositMarketAssetsRequest>>,
-    market_output: &Res<MarketOutputData>,
-) {
+pub fn deposit_market_assets_ui(ui: &mut egui::Ui, market: &mut ResMut<MarketUi>) {
     ui.label("Deposit Market Assets");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *market_input.deposit_market_assets_input.seed);
+    ui.text_edit_singleline(&mut *market.data.input.deposit_market_assets.seed);
     ui.label("Market ID");
     ui.add(
-        egui::DragValue::new(&mut *market_input.deposit_market_assets_input.market_id).speed(1.0),
+        egui::DragValue::new(&mut *market.data.input.deposit_market_assets.market_id).speed(1.0),
     );
     ui.label("Market Rate ID");
     ui.add(
-        egui::DragValue::new(&mut *market_input.deposit_market_assets_input.market_id).speed(1.0),
+        egui::DragValue::new(&mut *market.data.input.deposit_market_assets.market_id).speed(1.0),
     );
     ui.label("Amount");
-    ui.add(egui::DragValue::new(&mut market_input.deposit_market_assets_input.amount).speed(1.0));
+    ui.add(egui::DragValue::new(&mut market.data.input.deposit_market_assets.amount).speed(1.0));
     ui.separator();
-    if market_input.deposit_market_assets_input.loading {
+    if market.data.input.deposit_market_assets.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Deposit").clicked() {
-            deposit_tx
+            market
+                .channels
+                .deposit_market_assets
+                .input_tx
+                .0
                 .send(DepositMarketAssetsRequest {
                     input: DepositAssetsInput {
-                        seed: market_input.deposit_market_assets_input.seed.clone(),
-                        market_id: market_input.deposit_market_assets_input.market_id.clone(),
-                        market_rate_id: market_input
-                            .deposit_market_assets_input
+                        seed: market.data.input.deposit_market_assets.seed.clone(),
+                        market_id: market.data.input.deposit_market_assets.market_id.clone(),
+                        market_rate_id: market
+                            .data
+                            .input
+                            .deposit_market_assets
                             .market_rate_id
                             .clone(),
                         amount: Balance::from(
-                            market_input.deposit_market_assets_input.amount.clone() as u128,
+                            market.data.input.deposit_market_assets.amount.clone() as u128,
                         ),
                     },
                 })
                 .unwrap();
-            market_input.deposit_market_assets_input.loading = true;
+            market.data.input.deposit_market_assets.loading = true;
         }
     }
-    if let Some(output) = &market_output.deposit_market_assets_output {
+    if let Some(output) = &market.data.output.deposit_market_assets {
         ui.separator();
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.to_string());
@@ -129,28 +152,27 @@ pub fn deposit_market_assets_ui(
 }
 
 pub fn handle_deposit_market_assets_response(
-    mut market_output: ResMut<MarketOutputData>,
-    mut market_input: ResMut<MarketInputData>,
-    deposited_rx: Res<OutputReceiver<DepositAssetsOutput>>,
+    mut market: ResMut<MarketUi>,
+    tokio_runtime: Res<TokioRuntime>,
 ) {
-    if let Ok(deposited_result) = deposited_rx.0.try_recv() {
+    if let Ok(deposited_result) = market.channels.deposit_market_assets.output_rx.0.try_recv() {
         if let Some(deposited) = deposited_result {
-            market_output.deposit_market_assets_output = Some(deposited);
+            market.data.output.deposit_market_assets = Some(deposited);
         }
-        market_input.deposit_market_assets_input.loading = false;
+        market.data.input.deposit_market_assets.loading = false;
     }
+
+    request_handler::<DepositMarketAssetsRequest, DepositAssetsInput, DepositAssetsOutput>(
+        tokio_runtime.runtime.clone(),
+        market.channels.deposit_market_assets.input_rx.clone(),
+        market.channels.deposit_market_assets.output_tx.clone(),
+    );
 }
 
 pub struct DepositMarketAssetsPlugin;
 
 impl Plugin for DepositMarketAssetsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(
-            setup_in_out_channels::<DepositMarketAssetsRequest, DepositAssetsOutput>,
-        )
-        .add_system(
-            request_handler::<DepositMarketAssetsRequest, DepositAssetsInput, DepositAssetsOutput>,
-        )
-        .add_system(handle_deposit_market_assets_response);
+        app.add_system(handle_deposit_market_assets_response);
     }
 }

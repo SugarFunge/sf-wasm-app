@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bundle::{BundleSchema, RegisterBundleInput, RegisterBundleOutput},
     primitives::{AssetId, Balance, ClassId, Seed},
@@ -7,7 +8,7 @@ use sugarfunge_api_types::{
 
 use crate::{prelude::*, util::*};
 
-use super::{BundleInputData, BundleOutputData};
+use super::BundleUi;
 
 #[derive(Debug)]
 pub struct RegisterBundleRequest {
@@ -31,6 +32,27 @@ impl Request<RegisterBundleInput> for RegisterBundleRequest {
                 amounts: self.input.schema.amounts.clone(),
             },
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct RegisterBundleChannel {
+    pub input_tx: InputSender<RegisterBundleRequest>,
+    pub input_rx: InputReceiver<RegisterBundleRequest>,
+    pub output_tx: OutputSender<RegisterBundleOutput>,
+    pub output_rx: OutputReceiver<RegisterBundleOutput>,
+}
+
+impl Default for RegisterBundleChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<RegisterBundleRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<RegisterBundleOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -61,54 +83,49 @@ impl Default for RegisterBundleInputData {
     }
 }
 
-pub fn register_bundle_ui(
-    ui: &mut egui::Ui,
-    bundle_input: &mut ResMut<BundleInputData>,
-    registered_tx: &Res<InputSender<RegisterBundleRequest>>,
-    bundle_output: &Res<BundleOutputData>,
-) {
+pub fn register_bundle_ui(ui: &mut egui::Ui, bundle: &mut ResMut<BundleUi>) {
     ui.label("Register Bundle");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bundle_input.register_input.seed);
+    ui.text_edit_singleline(&mut *bundle.data.input.register.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *bundle_input.register_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bundle.data.input.register.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *bundle_input.register_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bundle.data.input.register.asset_id).speed(0.1));
     ui.label("Metadata");
-    ui.text_edit_multiline(&mut bundle_input.register_input.metadata);
+    ui.text_edit_multiline(&mut bundle.data.input.register.metadata);
     ui.label("Schema Class IDs");
-    vec_u64_input_ui(ui, &mut bundle_input.register_input.schema_class_ids);
+    vec_u64_input_ui(ui, &mut bundle.data.input.register.schema_class_ids);
     ui.label("Schema Asset IDs");
     vec_of_vec_u64_input_ui(
         ui,
-        &mut bundle_input.register_input.schema_asset_ids,
+        &mut bundle.data.input.register.schema_asset_ids,
         "Asset ID",
     );
     ui.label("Schema Amounts");
-    vec_of_vec_u64_input_ui(
-        ui,
-        &mut bundle_input.register_input.schema_amounts,
-        "Amount",
-    );
+    vec_of_vec_u64_input_ui(ui, &mut bundle.data.input.register.schema_amounts, "Amount");
     ui.separator();
     if ui.button("Register").clicked() {
         let class_ids: Vec<ClassId> =
-            transform_vec_of_u64_to_class_id(bundle_input.register_input.schema_class_ids.clone());
+            transform_vec_of_u64_to_class_id(bundle.data.input.register.schema_class_ids.clone());
         let asset_ids: Vec<Vec<AssetId>> = transform_doublevec_of_u64_to_asset_id(
-            bundle_input.register_input.schema_asset_ids.clone(),
+            bundle.data.input.register.schema_asset_ids.clone(),
         );
         let amounts: Vec<Vec<Balance>> = transform_doublevec_of_u64_to_balance(
-            bundle_input.register_input.schema_amounts.clone(),
+            bundle.data.input.register.schema_amounts.clone(),
         );
-        registered_tx
+        bundle
+            .channels
+            .register
+            .input_tx
+            .0
             .send(RegisterBundleRequest {
                 input: RegisterBundleInput {
-                    seed: bundle_input.register_input.seed.clone(),
-                    class_id: bundle_input.register_input.class_id.clone(),
-                    metadata: serde_json::from_str(&bundle_input.register_input.metadata.clone())
+                    seed: bundle.data.input.register.seed.clone(),
+                    class_id: bundle.data.input.register.class_id.clone(),
+                    metadata: serde_json::from_str(&bundle.data.input.register.metadata.clone())
                         .unwrap(),
-                    asset_id: bundle_input.register_input.asset_id.clone(),
+                    asset_id: bundle.data.input.register.asset_id.clone(),
                     schema: BundleSchema {
                         class_ids,
                         asset_ids,
@@ -117,9 +134,9 @@ pub fn register_bundle_ui(
                 },
             })
             .unwrap();
-        bundle_input.register_input.loading = true;
+        bundle.data.input.register.loading = true;
     }
-    if let Some(output) = &bundle_output.register_output {
+    if let Some(output) = &bundle.data.output.register {
         ui.separator();
         ui.label("Bundle ID");
         ui.text_edit_singleline(&mut output.bundle_id.as_str());
@@ -132,29 +149,25 @@ pub fn register_bundle_ui(
     }
 }
 
-pub fn handle_register_response(
-    mut bundle_output: ResMut<BundleOutputData>,
-    mut bundle_input: ResMut<BundleInputData>,
-    registered_rx: Res<OutputReceiver<RegisterBundleOutput>>,
-) {
-    if let Ok(registered_result) = registered_rx.0.try_recv() {
+pub fn handle_register_response(mut bundle: ResMut<BundleUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(registered_result) = bundle.channels.register.output_rx.0.try_recv() {
         if let Some(registered) = registered_result {
-            bundle_output.register_output = Some(registered);
+            bundle.data.output.register = Some(registered);
         }
-        bundle_input.register_input.loading = false;
+        bundle.data.input.register.loading = false;
     }
+
+    request_handler::<RegisterBundleRequest, RegisterBundleInput, RegisterBundleOutput>(
+        tokio_runtime.runtime.clone(),
+        bundle.channels.register.input_rx.clone(),
+        bundle.channels.register.output_tx.clone(),
+    );
 }
 
 pub struct RegisterBundlePlugin;
 
 impl Plugin for RegisterBundlePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(
-            setup_in_out_channels::<RegisterBundleRequest, RegisterBundleOutput>,
-        )
-        .add_system(
-            request_handler::<RegisterBundleRequest, RegisterBundleInput, RegisterBundleOutput>,
-        )
-        .add_system(handle_register_response);
+        app.add_system(handle_register_response);
     }
 }

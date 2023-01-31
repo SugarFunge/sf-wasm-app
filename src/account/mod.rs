@@ -1,8 +1,6 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::egui;
 use sugarfunge_api_types::account::*;
-
-use crate::prelude::*;
 
 pub mod balance;
 pub mod create;
@@ -10,102 +8,109 @@ pub mod exists;
 pub mod fund;
 pub mod seeded;
 
+#[derive(Resource, Default)]
+pub struct AccountUi {
+    pub actions: AccountActions,
+    pub data: AccountData,
+    pub channels: AccountChannels,
+}
+
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
 pub enum AccountActions {
-    GetSeededAccount,
-    GetAccountExists,
     #[default]
     CreateAccount,
     FundAccount,
     GetAccountBalance,
+    GetSeededAccount,
+    GetAccountExists,
 }
 
 #[derive(Resource, Debug, Default, Clone)]
 pub struct AccountInputData {
-    create_input: create::CreateAccountInputData,
-    fund_input: fund::FundAccountInputData,
-    exists_input: exists::AccountExistsInputData,
-    seeded_input: seeded::SeededAccountInputData,
-    balance_input: balance::AccountBalanceInputData,
+    create: create::CreateAccountInputData,
+    fund: fund::FundAccountInputData,
+    exists: exists::AccountExistsInputData,
+    seeded: seeded::SeededAccountInputData,
+    balance: balance::AccountBalanceInputData,
 }
 
 #[derive(Resource, Default, Debug)]
 pub struct AccountOutputData {
-    create_output: Option<CreateAccountOutput>,
-    fund_output: Option<FundAccountOutput>,
-    exists_output: Option<AccountExistsOutput>,
-    seeded_output: Option<SeededAccountOutput>,
-    balance_output: Option<AccountBalanceOutput>,
+    create: Option<CreateAccountOutput>,
+    fund: Option<FundAccountOutput>,
+    exists: Option<AccountExistsOutput>,
+    seeded: Option<SeededAccountOutput>,
+    balance: Option<AccountBalanceOutput>,
 }
 
-pub fn account_ui(
-    mut ctx: ResMut<EguiContext>,
-    mut account_actions: ResMut<AccountActions>,
-    mut account_input: ResMut<AccountInputData>,
-    account_output: Res<AccountOutputData>,
-    created_tx: Res<InputSender<create::CreateAccountRequest>>,
-    funded_tx: Res<InputSender<fund::FundAccountRequest>>,
-    exists_tx: Res<InputSender<exists::AccountExistsRequest>>,
-    seeded_tx: Res<InputSender<seeded::SeededAccountRequest>>,
-    balance_tx: Res<InputSender<balance::AccountBalanceRequest>>,
-) {
-    egui::Window::new("Account").show(&mut ctx.ctx_mut(), |ui| {
-        ui.horizontal(|ui| {
-            ui.selectable_value(
-                &mut *account_actions,
-                AccountActions::GetSeededAccount,
-                "Seeded",
-            );
-            ui.selectable_value(
-                &mut *account_actions,
-                AccountActions::GetAccountExists,
-                "Exists",
-            );
-            ui.selectable_value(
-                &mut *account_actions,
-                AccountActions::CreateAccount,
-                "Create",
-            );
-            ui.selectable_value(&mut *account_actions, AccountActions::FundAccount, "Fund");
-            ui.selectable_value(
-                &mut *account_actions,
-                AccountActions::GetAccountBalance,
-                "Balance",
-            );
-        });
-        ui.separator();
-        match &*account_actions {
-            AccountActions::GetSeededAccount => {
-                seeded::seeded_account_ui(ui, &mut account_input, &seeded_tx, &account_output)
-            }
-            AccountActions::GetAccountExists => {
-                exists::account_exists_ui(ui, &mut account_input, &exists_tx, &account_output)
-            }
-            AccountActions::CreateAccount => {
-                create::create_account_ui(ui, &mut account_input, &created_tx, &account_output)
-            }
-            AccountActions::FundAccount => {
-                fund::account_fund_ui(ui, &mut account_input, &funded_tx, &account_output)
-            }
-            AccountActions::GetAccountBalance => {
-                balance::account_balance_ui(ui, &mut account_input, &balance_tx, &account_output)
-            }
-        }
+#[derive(Resource, Default)]
+pub struct AccountData {
+    input: AccountInputData,
+    output: AccountOutputData,
+}
+
+#[derive(Resource, Default)]
+pub struct AccountChannels {
+    create: create::CreateAccountChannel,
+    fund: fund::FundAccountChannel,
+    exists: exists::AccountExistsChannel,
+    seeded: seeded::SeededAccountChannel,
+    balance: balance::AccountBalanceChannel,
+}
+
+pub fn account_ui(ui: &mut egui::Ui, account: &mut ResMut<AccountUi>) {
+    ui.horizontal(|ui| {
+        ui.selectable_value(
+            &mut account.actions,
+            AccountActions::CreateAccount,
+            "Create",
+        );
+        ui.selectable_value(&mut account.actions, AccountActions::FundAccount, "Fund");
+        ui.selectable_value(
+            &mut account.actions,
+            AccountActions::GetAccountBalance,
+            "Balance",
+        );
+        ui.selectable_value(
+            &mut account.actions,
+            AccountActions::GetSeededAccount,
+            "Seeded",
+        );
+        ui.selectable_value(
+            &mut account.actions,
+            AccountActions::GetAccountExists,
+            "Exists",
+        );
     });
+    ui.separator();
+    match &account.actions {
+        AccountActions::CreateAccount => {
+            create::create_account_ui(ui, account);
+        }
+        AccountActions::FundAccount => {
+            fund::account_fund_ui(ui, account);
+        }
+        AccountActions::GetAccountBalance => {
+            balance::account_balance_ui(ui, account);
+        }
+        AccountActions::GetSeededAccount => {
+            seeded::seeded_account_ui(ui, account);
+        }
+        AccountActions::GetAccountExists => {
+            exists::account_exists_ui(ui, account);
+        }
+    }
 }
 
 pub struct AccountPlugin;
 
 impl Plugin for AccountPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<AccountActions>()
-            .init_resource::<AccountInputData>()
-            .init_resource::<AccountOutputData>()
+        app.init_resource::<AccountUi>()
             .add_plugin(create::AccountCreatePlugin)
             .add_plugin(fund::AccountFundPlugin)
             .add_plugin(exists::AccountExistsPlugin)
             .add_plugin(seeded::SeededAccountPlugin)
-            .add_plugin(balance::AccountBalancePlugin)
-            .add_system(account_ui);
+            .add_plugin(balance::AccountBalancePlugin);
     }
 }

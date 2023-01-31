@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bag::{RegisterInput, RegisterOutput},
     primitives::{ClassId, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{BagInputData, BagOutputData};
+use super::BagUi;
 
 #[derive(Debug)]
 pub struct RegisterBagRequest {
@@ -28,6 +26,27 @@ impl Request<RegisterInput> for RegisterBagRequest {
             class_id: self.input.class_id.clone(),
             metadata: self.input.metadata.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct RegisterBagChannel {
+    pub input_tx: InputSender<RegisterBagRequest>,
+    pub input_rx: InputReceiver<RegisterBagRequest>,
+    pub output_tx: OutputSender<RegisterOutput>,
+    pub output_rx: OutputReceiver<RegisterOutput>,
+}
+
+impl Default for RegisterBagChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<RegisterBagRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<RegisterOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -50,38 +69,36 @@ impl Default for RegisterBagInputData {
     }
 }
 
-pub fn register_bag_ui(
-    ui: &mut egui::Ui,
-    bag_input: &mut ResMut<BagInputData>,
-    registered_tx: &Res<InputSender<RegisterBagRequest>>,
-    bag_output: &Res<BagOutputData>,
-) {
+pub fn register_bag_ui(ui: &mut egui::Ui, bag: &mut ResMut<BagUi>) {
     ui.label("Register Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bag_input.register_input.seed);
+    ui.text_edit_singleline(&mut *bag.data.input.register.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *bag_input.register_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *bag.data.input.register.class_id).speed(0.1));
     ui.label("Metadata");
-    ui.text_edit_multiline(&mut bag_input.register_input.metadata);
-    if bag_input.register_input.loading {
+    ui.text_edit_multiline(&mut bag.data.input.register.metadata);
+    if bag.data.input.register.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Register").clicked() {
-            registered_tx
+            bag.channels
+                .register
+                .input_tx
+                .0
                 .send(RegisterBagRequest {
                     input: RegisterInput {
-                        seed: bag_input.register_input.seed.clone(),
-                        class_id: bag_input.register_input.class_id,
-                        metadata: serde_json::from_str(&bag_input.register_input.metadata).unwrap(),
+                        seed: bag.data.input.register.seed.clone(),
+                        class_id: bag.data.input.register.class_id,
+                        metadata: serde_json::from_str(&bag.data.input.register.metadata).unwrap(),
                     },
                 })
                 .unwrap();
-            bag_input.register_input.loading = true;
+            bag.data.input.register.loading = true;
         }
     }
-    if let Some(output) = &bag_output.register_output {
+    if let Some(output) = &bag.data.output.register {
         ui.separator();
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
@@ -90,25 +107,25 @@ pub fn register_bag_ui(
     }
 }
 
-pub fn handle_register_response(
-    mut bag_output: ResMut<BagOutputData>,
-    mut bag_input: ResMut<BagInputData>,
-    registered_rx: Res<OutputReceiver<RegisterOutput>>,
-) {
-    if let Ok(registered_result) = registered_rx.0.try_recv() {
+pub fn handle_register_response(mut bag: ResMut<BagUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(registered_result) = bag.channels.register.output_rx.0.try_recv() {
         if let Some(registered) = registered_result {
-            bag_output.register_output = Some(registered);
+            bag.data.output.register = Some(registered);
         }
-        bag_input.register_input.loading = false;
+        bag.data.input.register.loading = false;
     }
+
+    request_handler::<RegisterBagRequest, RegisterInput, RegisterOutput>(
+        tokio_runtime.runtime.clone(),
+        bag.channels.register.input_rx.clone(),
+        bag.channels.register.output_tx.clone(),
+    );
 }
 
 pub struct RegisterBagPlugin;
 
 impl Plugin for RegisterBagPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<RegisterBagRequest, RegisterOutput>)
-            .add_system(request_handler::<RegisterBagRequest, RegisterInput, RegisterOutput>)
-            .add_system(handle_register_response);
+        app.add_system(handle_register_response);
     }
 }

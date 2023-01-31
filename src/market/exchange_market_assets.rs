@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     market::{ExchangeAssetsInput, ExchangeAssetsOutput},
     primitives::{Balance, MarketId, Seed},
 };
 
-use crate::{prelude::*, util::*};
+use crate::{prelude::*, util::request_handler};
 
-use super::{deposit_market_assets::rate_balances_ui, MarketInputData, MarketOutputData};
+use super::{deposit_market_assets::rate_balances_ui, MarketUi};
 
 #[derive(Debug)]
 pub struct ExchangeMarketAssetsRequest {
@@ -26,6 +27,27 @@ impl Request<ExchangeAssetsInput> for ExchangeMarketAssetsRequest {
             market_rate_id: self.input.market_rate_id.clone(),
             amount: self.input.amount.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct ExchangeMarketAssetsChannel {
+    pub input_tx: InputSender<ExchangeMarketAssetsRequest>,
+    pub input_rx: InputReceiver<ExchangeMarketAssetsRequest>,
+    pub output_tx: OutputSender<ExchangeAssetsOutput>,
+    pub output_rx: OutputReceiver<ExchangeAssetsOutput>,
+}
+
+impl Default for ExchangeMarketAssetsChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<ExchangeMarketAssetsRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<ExchangeAssetsOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -50,53 +72,54 @@ impl Default for ExchangeMarketAssetsInputData {
     }
 }
 
-pub fn exchange_market_assets_ui(
-    ui: &mut egui::Ui,
-    market_input: &mut ResMut<MarketInputData>,
-    exchange_tx: &Res<InputSender<ExchangeMarketAssetsRequest>>,
-    market_output: &Res<MarketOutputData>,
-) {
+pub fn exchange_market_assets_ui(ui: &mut egui::Ui, market: &mut ResMut<MarketUi>) {
     ui.label("Exchange Market Assets");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *market_input.exchange_market_assets_input.seed);
+    ui.text_edit_singleline(&mut *market.data.input.exchange_market_assets.seed);
     ui.label("Market ID");
     ui.add(
-        egui::DragValue::new(&mut *market_input.exchange_market_assets_input.market_id).speed(1.0),
+        egui::DragValue::new(&mut *market.data.input.exchange_market_assets.market_id).speed(1.0),
     );
     ui.label("Market Rate ID");
     ui.add(
-        egui::DragValue::new(&mut *market_input.exchange_market_assets_input.market_rate_id)
+        egui::DragValue::new(&mut *market.data.input.exchange_market_assets.market_rate_id)
             .speed(1.0),
     );
     ui.label("Amount");
-    ui.add(egui::DragValue::new(&mut market_input.exchange_market_assets_input.amount).speed(1.0));
+    ui.add(egui::DragValue::new(&mut market.data.input.exchange_market_assets.amount).speed(1.0));
     ui.separator();
-    if market_input.exchange_market_assets_input.loading {
+    if market.data.input.exchange_market_assets.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Exchange").clicked() {
-            exchange_tx
+            market
+                .channels
+                .exchange_market_assets
+                .input_tx
+                .0
                 .send(ExchangeMarketAssetsRequest {
                     input: ExchangeAssetsInput {
-                        seed: market_input.exchange_market_assets_input.seed.clone(),
-                        market_id: market_input.exchange_market_assets_input.market_id.clone(),
-                        market_rate_id: market_input
-                            .exchange_market_assets_input
+                        seed: market.data.input.exchange_market_assets.seed.clone(),
+                        market_id: market.data.input.exchange_market_assets.market_id.clone(),
+                        market_rate_id: market
+                            .data
+                            .input
+                            .exchange_market_assets
                             .market_rate_id
                             .clone(),
                         amount: Balance::from(
-                            market_input.exchange_market_assets_input.amount.clone() as u128,
+                            market.data.input.exchange_market_assets.amount.clone() as u128,
                         ),
                     },
                 })
                 .unwrap();
-            market_input.exchange_market_assets_input.loading = true;
+            market.data.input.exchange_market_assets.loading = true;
         }
     }
 
-    if let Some(output) = &market_output.exchange_market_assets_output {
+    if let Some(output) = &market.data.output.exchange_market_assets {
         ui.label("Buyer");
         ui.text_edit_singleline(&mut output.buyer.to_string());
         ui.label("Market ID");
@@ -112,28 +135,33 @@ pub fn exchange_market_assets_ui(
 }
 
 pub fn handle_exchange_market_assets_response(
-    mut market_output: ResMut<MarketOutputData>,
-    mut market_input: ResMut<MarketInputData>,
-    exchanged_rx: Res<OutputReceiver<ExchangeAssetsOutput>>,
+    mut market: ResMut<MarketUi>,
+    tokio_runtime: Res<TokioRuntime>,
 ) {
-    if let Ok(exchanged_result) = exchanged_rx.0.try_recv() {
+    if let Ok(exchanged_result) = market
+        .channels
+        .exchange_market_assets
+        .output_rx
+        .0
+        .try_recv()
+    {
         if let Some(exchanged) = exchanged_result {
-            market_output.exchange_market_assets_output = Some(exchanged);
+            market.data.output.exchange_market_assets = Some(exchanged);
         }
-        market_input.exchange_market_assets_input.loading = false;
+        market.data.input.exchange_market_assets.loading = false;
     }
+
+    request_handler::<ExchangeMarketAssetsRequest, ExchangeAssetsInput, ExchangeAssetsOutput>(
+        tokio_runtime.runtime.clone(),
+        market.channels.exchange_market_assets.input_rx.clone(),
+        market.channels.exchange_market_assets.output_tx.clone(),
+    );
 }
 
 pub struct ExchangeMarketAssetsPlugin;
 
 impl Plugin for ExchangeMarketAssetsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(
-            setup_in_out_channels::<ExchangeMarketAssetsRequest, ExchangeAssetsOutput>,
-        )
-        .add_system(
-            request_handler::<ExchangeMarketAssetsRequest, ExchangeAssetsInput, ExchangeAssetsOutput>,
-        )
-        .add_system(handle_exchange_market_assets_response);
+        app.add_system(handle_exchange_market_assets_response);
     }
 }

@@ -1,14 +1,9 @@
-use account::AccountPlugin;
-use asset::AssetPlugin;
-use bag::BagPlugin;
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
-use bundle::BundlePlugin;
-use class::ClassPlugin;
-use market::MarketPlugin;
+use debug_ui::DebugUiPlugin;
 use prelude::*;
 use simula_action::ActionPlugin;
 use simula_camera::orbitcam::*;
@@ -17,17 +12,17 @@ use simula_viz::{
     grid::{Grid, GridBundle, GridPlugin},
     lines::{LineMesh, LinesMaterial, LinesPlugin},
 };
-use validator::ValidatorPlugin;
 
 pub mod account;
 pub mod asset;
 pub mod bag;
 pub mod bundle;
 pub mod class;
+pub mod debug_ui;
 pub mod market;
 pub mod prelude;
-pub mod validator;
 pub mod util;
+pub mod validator;
 
 fn main() {
     let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap());
@@ -52,13 +47,7 @@ fn main() {
         .add_plugin(LinesPlugin)
         .add_plugin(AxesPlugin)
         .add_plugin(GridPlugin)
-        .add_plugin(AccountPlugin)
-        .add_plugin(ClassPlugin)
-        .add_plugin(AssetPlugin)
-        .add_plugin(BagPlugin)
-        .add_plugin(BundlePlugin)
-        .add_plugin(MarketPlugin)
-        .add_plugin(ValidatorPlugin)
+        .add_plugin(DebugUiPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();

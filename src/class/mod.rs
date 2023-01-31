@@ -1,11 +1,16 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::egui;
 use sugarfunge_api_types::asset::*;
-
-use crate::prelude::*;
 
 pub mod create;
 pub mod info;
+
+#[derive(Resource, Default)]
+pub struct ClassUi {
+    pub actions: ClassActions,
+    pub data: ClassData,
+    pub channels: ClassChannels,
+}
 
 #[derive(Resource, Debug, Default, Eq, PartialEq)]
 pub enum ClassActions {
@@ -16,50 +21,50 @@ pub enum ClassActions {
 
 #[derive(Resource, Debug, Default, Clone)]
 pub struct ClassInputData {
-    create_input: create::CreateClassInputData,
-    info_input: info::ClassInfoInputData,
+    create: create::CreateClassInputData,
+    info: info::ClassInfoInputData,
 }
 
 #[derive(Resource, Default, Debug)]
 pub struct ClassOutputData {
-    create_output: Option<CreateClassOutput>,
-    info_output: Option<ClassInfoOutput>,
+    create: Option<CreateClassOutput>,
+    info: Option<ClassInfoOutput>,
 }
 
-pub fn class_ui(
-    mut ctx: ResMut<EguiContext>,
-    mut class_actions: ResMut<ClassActions>,
-    mut class_input: ResMut<ClassInputData>,
-    class_output: Res<ClassOutputData>,
-    create_tx: Res<InputSender<create::CreateClassRequest>>,
-    info_tx: Res<InputSender<info::ClassInfoRequest>>,
-) {
-    egui::Window::new("Class").show(&mut ctx.ctx_mut(), |ui| {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut *class_actions, ClassActions::CreateClass, "Create");
-            ui.selectable_value(&mut *class_actions, ClassActions::ClassInfo, "Info");
-        });
-        ui.separator();
-        match &*class_actions {
-            ClassActions::CreateClass => {
-                create::create_class_ui(ui, &mut class_input, &create_tx, &class_output);
-            }
-            ClassActions::ClassInfo => {
-                info::class_info_ui(ui, &mut class_input, &info_tx, &class_output);
-            }
-        }
+#[derive(Resource, Default)]
+pub struct ClassData {
+    pub input: ClassInputData,
+    pub output: ClassOutputData,
+}
+
+#[derive(Resource, Default)]
+pub struct ClassChannels {
+    create: create::CreateClassChannel,
+    info: info::ClassInfoChannel,
+}
+
+pub fn class_ui(ui: &mut egui::Ui, class: &mut ResMut<ClassUi>) {
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut class.actions, ClassActions::CreateClass, "Create");
+        ui.selectable_value(&mut class.actions, ClassActions::ClassInfo, "Info");
     });
+    ui.separator();
+    match &class.actions {
+        ClassActions::CreateClass => {
+            create::create_class_ui(ui, class);
+        }
+        ClassActions::ClassInfo => {
+            info::class_info_ui(ui, class);
+        }
+    }
 }
 
 pub struct ClassPlugin;
 
 impl Plugin for ClassPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ClassActions>()
-            .init_resource::<ClassInputData>()
-            .init_resource::<ClassOutputData>()
+        app.init_resource::<ClassUi>()
             .add_plugin(create::CreateClassPlugin)
-            .add_plugin(info::ClassInfoPlugin)
-            .add_system(class_ui);
+            .add_plugin(info::ClassInfoPlugin);
     }
 }

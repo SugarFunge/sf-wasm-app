@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     account::{SeededAccountInput, SeededAccountOutput},
     primitives::Seed,
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AccountInputData, AccountOutputData};
+use super::AccountUi;
 
 #[derive(Debug)]
 pub struct SeededAccountRequest {
@@ -29,6 +27,27 @@ impl Request<SeededAccountInput> for SeededAccountRequest {
     }
 }
 
+#[derive(Resource)]
+pub struct SeededAccountChannel {
+    pub input_tx: InputSender<SeededAccountRequest>,
+    pub input_rx: InputReceiver<SeededAccountRequest>,
+    pub output_tx: OutputSender<SeededAccountOutput>,
+    pub output_rx: OutputReceiver<SeededAccountOutput>,
+}
+
+impl Default for SeededAccountChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<SeededAccountRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<SeededAccountOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
+    }
+}
+
 #[derive(Resource, Debug, Clone)]
 pub struct SeededAccountInputData {
     pub seed: Seed,
@@ -44,33 +63,31 @@ impl Default for SeededAccountInputData {
     }
 }
 
-pub fn seeded_account_ui(
-    ui: &mut egui::Ui,
-    account_input: &mut ResMut<AccountInputData>,
-    seeded_tx: &Res<InputSender<SeededAccountRequest>>,
-    account_output: &Res<AccountOutputData>,
-) {
+pub fn seeded_account_ui(ui: &mut egui::Ui, account: &mut ResMut<AccountUi>) {
     ui.label("Seeded Account");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *account_input.seeded_input.seed);
-    if account_input.seeded_input.loading {
+    ui.text_edit_singleline(&mut *account.data.input.seeded.seed);
+    if account.data.input.seeded.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Get Account from Seed").clicked() {
-            seeded_tx
+            account
+                .channels
+                .seeded
+                .input_tx
                 .0
                 .send(SeededAccountRequest {
                     input: SeededAccountInput {
-                        seed: account_input.seeded_input.seed.clone(),
+                        seed: account.data.input.seeded.seed.clone(),
                     },
                 })
                 .unwrap();
-            account_input.seeded_input.loading = true;
+            account.data.input.seeded.loading = true;
         }
     }
-    if let Some(output) = &account_output.seeded_output {
+    if let Some(output) = &account.data.output.seeded {
         ui.separator();
         ui.label("Account");
         ui.text_edit_singleline(&mut output.account.as_str());
@@ -79,27 +96,25 @@ pub fn seeded_account_ui(
     }
 }
 
-pub fn handle_seeded_response(
-    mut account_output: ResMut<AccountOutputData>,
-    mut account_input: ResMut<AccountInputData>,
-    seeded_rx: Res<OutputReceiver<SeededAccountOutput>>,
-) {
-    if let Ok(seeded_result) = seeded_rx.0.try_recv() {
+pub fn handle_seeded_response(mut account: ResMut<AccountUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(seeded_result) = account.channels.seeded.output_rx.0.try_recv() {
         if let Some(seeded) = seeded_result {
-            account_output.seeded_output = Some(seeded);
+            account.data.output.seeded = Some(seeded);
         }
-        account_input.seeded_input.loading = false;
+        account.data.input.seeded.loading = false;
     }
+
+    request_handler::<SeededAccountRequest, SeededAccountInput, SeededAccountOutput>(
+        tokio_runtime.runtime.clone(),
+        account.channels.seeded.input_rx.clone(),
+        account.channels.seeded.output_tx.clone(),
+    );
 }
 
 pub struct SeededAccountPlugin;
 
 impl Plugin for SeededAccountPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<SeededAccountRequest, SeededAccountOutput>)
-            .add_system(
-                request_handler::<SeededAccountRequest, SeededAccountInput, SeededAccountOutput>,
-            )
-            .add_system(handle_seeded_response);
+        app.add_system(handle_seeded_response);
     }
 }

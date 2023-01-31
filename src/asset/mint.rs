@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     asset::{MintInput, MintOutput},
     primitives::{Account, AssetId, Balance, ClassId, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AssetInputData, AssetOutputData};
+use super::AssetUi;
 
 #[derive(Debug)]
 pub struct AssetMintRequest {
@@ -56,44 +54,64 @@ impl Default for AssetMintInputData {
     }
 }
 
-pub fn asset_mint_ui(
-    ui: &mut egui::Ui,
-    asset_input: &mut ResMut<AssetInputData>,
-    minted_tx: &Res<InputSender<AssetMintRequest>>,
-    asset_output: &Res<AssetOutputData>,
-) {
+#[derive(Resource)]
+pub struct AssetMintChannel {
+    pub input_tx: InputSender<AssetMintRequest>,
+    pub input_rx: InputReceiver<AssetMintRequest>,
+    pub output_tx: OutputSender<MintOutput>,
+    pub output_rx: OutputReceiver<MintOutput>,
+}
+
+impl Default for AssetMintChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<AssetMintRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<MintOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
+    }
+}
+
+pub fn asset_mint_ui(ui: &mut egui::Ui, asset: &mut ResMut<AssetUi>) {
     ui.label("Mint Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *asset_input.mint_input.seed);
+    ui.text_edit_singleline(&mut *asset.data.input.mint.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.mint_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.mint.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.mint_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.mint.asset_id).speed(0.1));
     ui.label("Amount");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.mint_input.amount).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut asset.data.input.mint.amount).speed(0.1));
     ui.label("To");
-    ui.text_edit_singleline(&mut *asset_input.mint_input.to);
-    if asset_input.mint_input.loading {
+    ui.text_edit_singleline(&mut *asset.data.input.mint.to);
+    if asset.data.input.mint.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Mint").clicked() {
-            minted_tx
+            asset
+                .channels
+                .mint
+                .input_tx
+                .0
                 .send(AssetMintRequest {
                     input: MintInput {
-                        seed: asset_input.mint_input.seed.clone(),
-                        class_id: asset_input.mint_input.class_id,
-                        to: asset_input.mint_input.to.clone(),
-                        asset_id: asset_input.mint_input.asset_id,
-                        amount: Balance::from(asset_input.mint_input.amount as u128),
+                        seed: asset.data.input.mint.seed.clone(),
+                        class_id: asset.data.input.mint.class_id,
+                        to: asset.data.input.mint.to.clone(),
+                        asset_id: asset.data.input.mint.asset_id,
+                        amount: Balance::from(asset.data.input.mint.amount as u128),
                     },
                 })
                 .unwrap();
-            asset_input.mint_input.loading = true;
+            asset.data.input.mint.loading = true;
         }
     }
-    if let Some(output) = &asset_output.mint_output {
+    if let Some(output) = &asset.data.output.mint {
         ui.separator();
         ui.label("To");
         ui.text_edit_singleline(&mut output.to.as_str());
@@ -108,25 +126,25 @@ pub fn asset_mint_ui(
     }
 }
 
-pub fn handle_mint_response(
-    mut asset_output: ResMut<AssetOutputData>,
-    mut asset_input: ResMut<AssetInputData>,
-    mint_rx: Res<OutputReceiver<MintOutput>>,
-) {
-    if let Ok(mint_result) = mint_rx.0.try_recv() {
+pub fn handle_mint_response(mut asset: ResMut<AssetUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(mint_result) = asset.channels.mint.output_rx.try_recv() {
         if let Some(mint) = mint_result {
-            asset_output.mint_output = Some(mint);
+            asset.data.output.mint = Some(mint);
         }
-        asset_input.mint_input.loading = false;
+        asset.data.input.mint.loading = false;
     }
+
+    request_handler::<AssetMintRequest, MintInput, MintOutput>(
+        tokio_runtime.runtime.clone(),
+        asset.channels.mint.input_rx.clone(),
+        asset.channels.mint.output_tx.clone(),
+    );
 }
 
 pub struct AssetMintPlugin;
 
 impl Plugin for AssetMintPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<AssetMintRequest, MintOutput>)
-            .add_system(request_handler::<AssetMintRequest, MintInput, MintOutput>)
-            .add_system(handle_mint_response);
+        app.add_system(handle_mint_response);
     }
 }

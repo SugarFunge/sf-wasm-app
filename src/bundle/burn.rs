@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bundle::{BurnBundleInput, BurnBundleOutput},
     primitives::{Account, Balance, BundleId, Seed},
 };
 
-use crate::{prelude::*, util::*};
+use crate::{prelude::*, util::request_handler};
 
-use super::{BundleInputData, BundleOutputData};
+use super::BundleUi;
 
 #[derive(Debug)]
 pub struct BurnBundleRequest {
@@ -27,6 +28,27 @@ impl Request<BurnBundleInput> for BurnBundleRequest {
             bundle_id: self.input.bundle_id.clone(),
             amount: self.input.amount.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct BurnBundleChannel {
+    pub input_tx: InputSender<BurnBundleRequest>,
+    pub input_rx: InputReceiver<BurnBundleRequest>,
+    pub output_tx: OutputSender<BurnBundleOutput>,
+    pub output_rx: OutputReceiver<BurnBundleOutput>,
+}
+
+impl Default for BurnBundleChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<BurnBundleRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<BurnBundleOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -53,41 +75,40 @@ impl Default for BurnBundleInputData {
     }
 }
 
-pub fn burn_bundle_ui(
-    ui: &mut egui::Ui,
-    bundle_input: &mut ResMut<BundleInputData>,
-    burn_tx: &Res<InputSender<BurnBundleRequest>>,
-    bundle_output: &Res<BundleOutputData>,
-) {
+pub fn burn_bundle_ui(ui: &mut egui::Ui, bundle: &mut ResMut<BundleUi>) {
     ui.label("Burn Bundle");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bundle_input.burn_input.seed);
+    ui.text_edit_singleline(&mut *bundle.data.input.burn.seed);
     ui.label("From");
-    ui.text_edit_singleline(&mut *bundle_input.burn_input.from);
+    ui.text_edit_singleline(&mut *bundle.data.input.burn.from);
     ui.label("To");
-    ui.text_edit_singleline(&mut *bundle_input.burn_input.to);
+    ui.text_edit_singleline(&mut *bundle.data.input.burn.to);
     ui.label("Bundle ID");
-    ui.text_edit_singleline(&mut *bundle_input.burn_input.bundle_id);
+    ui.text_edit_singleline(&mut *bundle.data.input.burn.bundle_id);
     ui.label("Amount");
-    ui.add(egui::DragValue::new(&mut bundle_input.burn_input.amount).speed(1.0));
+    ui.add(egui::DragValue::new(&mut bundle.data.input.burn.amount).speed(1.0));
     ui.separator();
     if ui.button("Burn").clicked() {
-        burn_tx
+        bundle
+            .channels
+            .burn
+            .input_tx
+            .0
             .send(BurnBundleRequest {
                 input: BurnBundleInput {
-                    seed: bundle_input.burn_input.seed.clone(),
-                    from: bundle_input.burn_input.from.clone(),
-                    to: bundle_input.burn_input.to.clone(),
-                    bundle_id: bundle_input.burn_input.bundle_id.clone(),
-                    amount: Balance::from(bundle_input.burn_input.amount as u128),
+                    seed: bundle.data.input.burn.seed.clone(),
+                    from: bundle.data.input.burn.from.clone(),
+                    to: bundle.data.input.burn.to.clone(),
+                    bundle_id: bundle.data.input.burn.bundle_id.clone(),
+                    amount: Balance::from(bundle.data.input.burn.amount as u128),
                 },
             })
             .unwrap();
-        bundle_input.burn_input.loading = true;
+        bundle.data.input.burn.loading = true;
     }
     ui.separator();
-    if let Some(output) = &bundle_output.burn_output {
+    if let Some(output) = &bundle.data.output.burn {
         ui.separator();
         ui.label("Who");
         ui.text_edit_singleline(&mut output.who.as_str());
@@ -102,25 +123,25 @@ pub fn burn_bundle_ui(
     }
 }
 
-pub fn handle_mint_response(
-    mut bundle_output: ResMut<BundleOutputData>,
-    mut bundle_input: ResMut<BundleInputData>,
-    burn_rx: Res<OutputReceiver<BurnBundleOutput>>,
-) {
-    if let Ok(burn_result) = burn_rx.0.try_recv() {
+pub fn handle_mint_response(mut bundle: ResMut<BundleUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(burn_result) = bundle.channels.burn.output_rx.0.try_recv() {
         if let Some(burn) = burn_result {
-            bundle_output.burn_output = Some(burn);
+            bundle.data.output.burn = Some(burn);
         }
-        bundle_input.burn_input.loading = false;
+        bundle.data.input.burn.loading = false;
     }
+
+    request_handler::<BurnBundleRequest, BurnBundleInput, BurnBundleOutput>(
+        tokio_runtime.runtime.clone(),
+        bundle.channels.burn.input_rx.clone(),
+        bundle.channels.burn.output_tx.clone(),
+    );
 }
 
 pub struct BurnBundlePlugin;
 
 impl Plugin for BurnBundlePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<BurnBundleRequest, BurnBundleOutput>)
-            .add_system(request_handler::<BurnBundleRequest, BurnBundleInput, BurnBundleOutput>)
-            .add_system(handle_mint_response);
+        app.add_system(handle_mint_response);
     }
 }

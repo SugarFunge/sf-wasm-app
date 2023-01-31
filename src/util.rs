@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 use bevy_inspector_egui::egui;
-use crossbeam::channel;
+use crossbeam::channel::{self, Receiver, Sender};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sugarfunge_api_types::primitives::{AssetId, Balance, ClassId};
+use tokio::runtime::Runtime;
 
 use crate::prelude::*;
 
@@ -69,13 +72,11 @@ pub fn request_handler<
     E: Serialize + Send + Sync,
     K: Send + Sync + 'static + for<'de> Deserialize<'de>,
 >(
-    tokio_runtime: Res<TokioRuntime>,
-    input_rx: Res<InputReceiver<T>>,
-    output_tx: Res<OutputSender<K>>,
+    rt: Arc<Runtime>,
+    input_rx: Receiver<T>,
+    output_tx: Sender<Option<K>>,
 ) {
-    let rt = tokio_runtime.runtime.clone();
-    let output_tx: channel::Sender<Option<K>> = output_tx.0.clone();
-    if let Ok(request) = input_rx.0.try_recv() {
+    if let Ok(request) = input_rx.try_recv() {
         rt.spawn(async move {
             let result: Result<K, RequestError>;
             if let Some(input) = request.input() {

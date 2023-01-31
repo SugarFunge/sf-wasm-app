@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     asset::{AssetBalancesInput, AssetBalancesOutput},
     primitives::{Account, ClassId},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AssetInputData, AssetOutputData};
+use super::AssetUi;
 
 #[derive(Debug)]
 pub struct AssetBalancesRequest {
@@ -27,6 +25,27 @@ impl Request<AssetBalancesInput> for AssetBalancesRequest {
             class_id: self.input.class_id.clone(),
             account: self.input.account.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct AssetBalancesChannel {
+    pub input_tx: InputSender<AssetBalancesRequest>,
+    pub input_rx: InputReceiver<AssetBalancesRequest>,
+    pub output_tx: OutputSender<AssetBalancesOutput>,
+    pub output_rx: OutputReceiver<AssetBalancesOutput>,
+}
+
+impl Default for AssetBalancesChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<AssetBalancesRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<AssetBalancesOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -49,47 +68,46 @@ impl Default for AssetBalancesInputData {
     }
 }
 
-pub fn asset_balances_ui(
-    ui: &mut egui::Ui,
-    asset_input: &mut ResMut<AssetInputData>,
-    balances_tx: &Res<InputSender<AssetBalancesRequest>>,
-    asset_output: &Res<AssetOutputData>,
-) {
+pub fn asset_balances_ui(ui: &mut egui::Ui, asset: &mut ResMut<AssetUi>) {
     ui.label("Asset Balances");
     ui.separator();
     ui.label("Account");
-    ui.text_edit_singleline(&mut *asset_input.balances_input.account);
+    ui.text_edit_singleline(&mut *asset.data.input.balances.account);
     ui.checkbox(
-        &mut asset_input.balances_input.class_id_enabled,
+        &mut asset.data.input.balances.class_id_enabled,
         "Enable Class ID",
     );
-    if asset_input.balances_input.class_id_enabled {
+    if asset.data.input.balances.class_id_enabled {
         ui.label("Class ID");
-        ui.add(egui::DragValue::new::<u64>(&mut *asset_input.balances_input.class_id).speed(0.1));
+        ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.balances.class_id).speed(0.1));
     }
     ui.separator();
-    if asset_input.balances_input.loading {
+    if asset.data.input.balances.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Get Balances").clicked() {
-            balances_tx
+            asset
+                .channels
+                .balances
+                .input_tx
+                .0
                 .send(AssetBalancesRequest {
                     input: AssetBalancesInput {
-                        class_id: if asset_input.balances_input.class_id_enabled {
-                            Some(asset_input.balances_input.class_id)
+                        class_id: if asset.data.input.balances.class_id_enabled {
+                            Some(asset.data.input.balances.class_id)
                         } else {
                             None
                         },
-                        account: asset_input.balances_input.account.clone(),
+                        account: asset.data.input.balances.account.clone(),
                     },
                 })
                 .unwrap();
-            asset_input.balances_input.loading = true;
+            asset.data.input.balances.loading = true;
         }
     }
     ui.separator();
-    if let Some(balances_output) = &asset_output.balances_output {
+    if let Some(balances_output) = &asset.data.output.balances {
         ui.label("Balances");
         ui.separator();
         for (i, balance) in balances_output.balances.iter().enumerate() {
@@ -100,27 +118,25 @@ pub fn asset_balances_ui(
     }
 }
 
-pub fn handle_balances_response(
-    mut asset_output: ResMut<AssetOutputData>,
-    mut asset_input: ResMut<AssetInputData>,
-    balances_rx: Res<OutputReceiver<AssetBalancesOutput>>,
-) {
-    if let Ok(balances_result) = balances_rx.0.try_recv() {
+pub fn handle_balances_response(mut asset: ResMut<AssetUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(balances_result) = asset.channels.balances.output_rx.0.try_recv() {
         if let Some(balances) = balances_result {
-            asset_output.balances_output = Some(balances);
+            asset.data.output.balances = Some(balances);
         }
-        asset_input.balances_input.loading = false;
+        asset.data.input.balances.loading = false;
     }
+
+    request_handler::<AssetBalancesRequest, AssetBalancesInput, AssetBalancesOutput>(
+        tokio_runtime.runtime.clone(),
+        asset.channels.balances.input_rx.clone(),
+        asset.channels.balances.output_tx.clone(),
+    );
 }
 
 pub struct AssetBalancesPlugin;
 
 impl Plugin for AssetBalancesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<AssetBalancesRequest, AssetBalancesOutput>)
-            .add_system(
-                request_handler::<AssetBalancesRequest, AssetBalancesInput, AssetBalancesOutput>,
-            )
-            .add_system(handle_balances_response);
+        app.add_system(handle_balances_response);
     }
 }

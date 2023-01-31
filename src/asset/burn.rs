@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     asset::{BurnInput, BurnOutput},
     primitives::{Account, AssetId, Balance, ClassId, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AssetInputData, AssetOutputData};
+use super::AssetUi;
 
 #[derive(Debug)]
 pub struct AssetBurnRequest {
@@ -30,6 +28,27 @@ impl Request<BurnInput> for AssetBurnRequest {
             amount: self.input.amount.clone(),
             from: self.input.from.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct AssetBurnChannel {
+    pub input_tx: InputSender<AssetBurnRequest>,
+    pub input_rx: InputReceiver<AssetBurnRequest>,
+    pub output_tx: OutputSender<BurnOutput>,
+    pub output_rx: OutputReceiver<BurnOutput>,
+}
+
+impl Default for AssetBurnChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<AssetBurnRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<BurnOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -56,45 +75,44 @@ impl Default for AssetBurnInputData {
     }
 }
 
-pub fn asset_burn_ui(
-    ui: &mut egui::Ui,
-    asset_input: &mut ResMut<AssetInputData>,
-    burned_tx: &Res<InputSender<AssetBurnRequest>>,
-    asset_output: &Res<AssetOutputData>,
-) {
+pub fn asset_burn_ui(ui: &mut egui::Ui, asset: &mut ResMut<AssetUi>) {
     ui.label("Burn Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *asset_input.burn_input.seed);
+    ui.text_edit_singleline(&mut *asset.data.input.burn.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.burn_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.burn.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.burn_input.asset_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.burn.asset_id).speed(0.1));
     ui.label("Amount");
-    ui.add(egui::DragValue::new::<u64>(&mut asset_input.burn_input.amount).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut asset.data.input.burn.amount).speed(0.1));
     ui.label("From");
-    ui.text_edit_singleline(&mut *asset_input.burn_input.from);
+    ui.text_edit_singleline(&mut *asset.data.input.burn.from);
     ui.separator();
-    if asset_input.burn_input.loading {
+    if asset.data.input.burn.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Burn").clicked() {
-            burned_tx
+            asset
+                .channels
+                .burn
+                .input_tx
+                .0
                 .send(AssetBurnRequest {
                     input: BurnInput {
-                        seed: asset_input.burn_input.seed.clone(),
-                        class_id: asset_input.burn_input.class_id,
-                        asset_id: asset_input.burn_input.asset_id,
-                        amount: Balance::from(asset_input.burn_input.amount as u128),
-                        from: asset_input.burn_input.from.clone(),
+                        seed: asset.data.input.burn.seed.clone(),
+                        class_id: asset.data.input.burn.class_id,
+                        asset_id: asset.data.input.burn.asset_id,
+                        amount: Balance::from(asset.data.input.burn.amount as u128),
+                        from: asset.data.input.burn.from.clone(),
                     },
                 })
                 .unwrap();
-            asset_input.burn_input.loading = true;
+            asset.data.input.burn.loading = true;
         }
     }
-    if let Some(output) = &asset_output.burn_output {
+    if let Some(output) = &asset.data.output.burn {
         ui.separator();
         ui.label("From");
         ui.text_edit_singleline(&mut output.from.as_str());
@@ -109,25 +127,25 @@ pub fn asset_burn_ui(
     }
 }
 
-pub fn handle_burn_response(
-    mut asset_output: ResMut<AssetOutputData>,
-    mut asset_input: ResMut<AssetInputData>,
-    burn_rx: Res<OutputReceiver<BurnOutput>>,
-) {
-    if let Ok(burn_result) = burn_rx.0.try_recv() {
+pub fn handle_burn_response(mut asset: ResMut<AssetUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(burn_result) = asset.channels.burn.output_rx.0.try_recv() {
         if let Some(burn) = burn_result {
-            asset_output.burn_output = Some(burn);
+            asset.data.output.burn = Some(burn);
         }
-        asset_input.burn_input.loading = false;
+        asset.data.input.burn.loading = false;
     }
+
+    request_handler::<AssetBurnRequest, BurnInput, BurnOutput>(
+        tokio_runtime.runtime.clone(),
+        asset.channels.burn.input_rx.clone(),
+        asset.channels.burn.output_tx.clone(),
+    );
 }
 
 pub struct AssetBurnPlugin;
 
 impl Plugin for AssetBurnPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<AssetBurnRequest, BurnOutput>)
-            .add_system(request_handler::<AssetBurnRequest, BurnInput, BurnOutput>)
-            .add_system(handle_burn_response);
+        app.add_system(handle_burn_response);
     }
 }

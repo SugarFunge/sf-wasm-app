@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bag::{CreateInput, CreateOutput},
     primitives::{Account, Balance, ClassId, Seed},
@@ -7,10 +8,10 @@ use sugarfunge_api_types::{
 
 use crate::{
     prelude::*,
-    util::{request_handler, setup_in_out_channels, vec_u64_input_ui},
+    util::{request_handler, vec_u64_input_ui},
 };
 
-use super::{BagInputData, BagOutputData};
+use super::BagUi;
 
 #[derive(Debug)]
 pub struct CreateBagRequest {
@@ -29,6 +30,27 @@ impl Request<CreateInput> for CreateBagRequest {
             owners: self.input.owners.clone(),
             shares: self.input.shares.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct CreateBagChannel {
+    pub input_tx: InputSender<CreateBagRequest>,
+    pub input_rx: InputReceiver<CreateBagRequest>,
+    pub output_tx: OutputSender<CreateOutput>,
+    pub output_rx: OutputReceiver<CreateOutput>,
+}
+
+impl Default for CreateBagChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<CreateBagRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<CreateOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -53,65 +75,64 @@ impl Default for CreateBagInputData {
     }
 }
 
-pub fn create_bag_ui(
-    ui: &mut egui::Ui,
-    bag_input: &mut ResMut<BagInputData>,
-    created_tx: &Res<InputSender<CreateBagRequest>>,
-    bag_output: &Res<BagOutputData>,
-) {
+pub fn create_bag_ui(ui: &mut egui::Ui, bag: &mut ResMut<BagUi>) {
     ui.label("Create Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bag_input.create_input.seed);
+    ui.text_edit_singleline(&mut *bag.data.input.create.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut bag_input.create_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut bag.data.input.create.class_id).speed(0.1));
     ui.label("Owners");
     if ui.button("Add Owner").clicked() {
-        bag_input
-            .create_input
+        bag.data
+            .input
+            .create
             .owners
             .push(Account::from("".to_string()));
     }
-    let owners = bag_input.create_input.owners.clone();
+    let owners = bag.data.input.create.owners.clone();
     let mut owner_remove_index: Option<usize> = None;
     for (i, _) in owners.iter().enumerate() {
         ui.horizontal(|ui| {
-            ui.text_edit_singleline(&mut *bag_input.create_input.owners[i]);
+            ui.text_edit_singleline(&mut *bag.data.input.create.owners[i]);
             if ui.button("Remove").clicked() {
                 owner_remove_index = Some(i);
             }
         });
     }
     if let Some(index) = owner_remove_index {
-        bag_input.create_input.owners.remove(index);
+        bag.data.input.create.owners.remove(index);
     }
     ui.label("Shares");
     ui.label("The Shares are represented in 10^18 units.");
-    vec_u64_input_ui(ui, &mut bag_input.create_input.shares);
-    if bag_input.create_input.loading {
+    vec_u64_input_ui(ui, &mut bag.data.input.create.shares);
+    if bag.data.input.create.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Create").clicked() {
             let mut shares_input = Vec::new();
-            for share in bag_input.create_input.shares.iter() {
+            for share in bag.data.input.create.shares.iter() {
                 shares_input.push(Balance::from((*share as u128) * (u128::pow(10, 18))));
             }
-            created_tx
+            bag.channels
+                .create
+                .input_tx
+                .0
                 .send(CreateBagRequest {
                     input: CreateInput {
-                        seed: bag_input.create_input.seed.clone(),
-                        class_id: bag_input.create_input.class_id,
-                        owners: bag_input.create_input.owners.clone(),
+                        seed: bag.data.input.create.seed.clone(),
+                        class_id: bag.data.input.create.class_id,
+                        owners: bag.data.input.create.owners.clone(),
 
                         shares: shares_input,
                     },
                 })
                 .unwrap();
-            bag_input.create_input.loading = true;
+            bag.data.input.create.loading = true;
         }
     }
-    if let Some(output) = &bag_output.create_output {
+    if let Some(output) = &bag.data.output.create {
         ui.separator();
         ui.label("Bag");
         ui.text_edit_singleline(&mut output.bag.as_str());
@@ -128,25 +149,25 @@ pub fn create_bag_ui(
     }
 }
 
-pub fn handle_create_response(
-    mut bag_output: ResMut<BagOutputData>,
-    mut bag_input: ResMut<BagInputData>,
-    created_rx: Res<OutputReceiver<CreateOutput>>,
-) {
-    if let Ok(created_result) = created_rx.0.try_recv() {
+pub fn handle_create_response(mut bag: ResMut<BagUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(created_result) = bag.channels.create.output_rx.0.try_recv() {
         if let Some(created) = created_result {
-            bag_output.create_output = Some(created);
+            bag.data.output.create = Some(created);
         }
-        bag_input.create_input.loading = false;
+        bag.data.input.create.loading = false;
     }
+
+    request_handler::<CreateBagRequest, CreateInput, CreateOutput>(
+        tokio_runtime.runtime.clone(),
+        bag.channels.create.input_rx.clone(),
+        bag.channels.create.output_tx.clone(),
+    );
 }
 
 pub struct CreateBagPlugin;
 
 impl Plugin for CreateBagPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<CreateBagRequest, CreateOutput>)
-            .add_system(request_handler::<CreateBagRequest, CreateInput, CreateOutput>)
-            .add_system(handle_create_response);
+        app.add_system(handle_create_response);
     }
 }

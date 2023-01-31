@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     primitives::{Seed, ValidatorId},
     validator::{AddValidatorInput, AddValidatorOutput},
 };
 
-use crate::{prelude::*, util::*};
+use crate::{prelude::*, util::request_handler};
 
-use super::{ValidatorInputData, ValidatorOutputData};
+use super::ValidatorUi;
 
 #[derive(Debug)]
 pub struct AddValidatorRequest {
@@ -24,6 +25,27 @@ impl Request<AddValidatorInput> for AddValidatorRequest {
             seed: self.input.seed.clone(),
             validator_id: self.input.validator_id.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct AddValidatorChannel {
+    pub input_tx: InputSender<AddValidatorRequest>,
+    pub input_rx: InputReceiver<AddValidatorRequest>,
+    pub output_tx: OutputSender<AddValidatorOutput>,
+    pub output_rx: OutputReceiver<AddValidatorOutput>,
+}
+
+impl Default for AddValidatorChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<AddValidatorRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<AddValidatorOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -44,63 +66,59 @@ impl Default for AddValidatorInputData {
     }
 }
 
-pub fn add_validator_ui(
-    ui: &mut egui::Ui,
-    validator_input: &mut ResMut<ValidatorInputData>,
-    add_tx: &Res<InputSender<AddValidatorRequest>>,
-    validator_output: &Res<ValidatorOutputData>,
-) {
+pub fn add_validator_ui(ui: &mut egui::Ui, validator: &mut ResMut<ValidatorUi>) {
     ui.label("Add Validator");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *validator_input.add_input.seed);
+    ui.text_edit_singleline(&mut *validator.data.input.add.seed);
     ui.label("Validator ID");
-    ui.text_edit_singleline(&mut *validator_input.add_input.validator_id);
-    if validator_input.add_input.loading {
+    ui.text_edit_singleline(&mut *validator.data.input.add.validator_id);
+    if validator.data.input.add.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Add").clicked() {
-            add_tx
+            validator
+                .channels
+                .add
+                .input_tx
                 .0
                 .send(AddValidatorRequest {
                     input: AddValidatorInput {
-                        seed: validator_input.add_input.seed.clone(),
-                        validator_id: validator_input.add_input.validator_id.clone(),
+                        seed: validator.data.input.add.seed.clone(),
+                        validator_id: validator.data.input.add.validator_id.clone(),
                     },
                 })
                 .unwrap();
-            validator_input.add_input.loading = true;
+            validator.data.input.add.loading = true;
         }
     }
-    if let Some(output) = &validator_output.add_output {
+    if let Some(output) = &validator.data.output.add {
         ui.separator();
         ui.label("Validator ID");
         ui.text_edit_singleline(&mut output.validator_id.as_str());
     }
 }
 
-pub fn handle_add_response(
-    mut validator_output: ResMut<ValidatorOutputData>,
-    mut validator_input: ResMut<ValidatorInputData>,
-    added_rx: Res<OutputReceiver<AddValidatorOutput>>,
-) {
-    if let Ok(added_result) = added_rx.0.try_recv() {
+pub fn handle_add_response(mut validator: ResMut<ValidatorUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(added_result) = validator.channels.add.output_rx.0.try_recv() {
         if let Some(added) = added_result {
-            validator_output.add_output = Some(added);
+            validator.data.output.add = Some(added);
         }
-        validator_input.add_input.loading = false;
+        validator.data.input.add.loading = false;
     }
+
+    request_handler::<AddValidatorRequest, AddValidatorInput, AddValidatorOutput>(
+        tokio_runtime.runtime.clone(),
+        validator.channels.add.input_rx.clone(),
+        validator.channels.add.output_tx.clone(),
+    );
 }
 
 pub struct AddValidatorPlugin;
 
 impl Plugin for AddValidatorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<AddValidatorRequest, AddValidatorOutput>)
-            .add_system(
-                request_handler::<AddValidatorRequest, AddValidatorInput, AddValidatorOutput>,
-            )
-            .add_system(handle_add_response);
+        app.add_system(handle_add_response);
     }
 }

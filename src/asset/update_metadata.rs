@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     asset::{UpdateMetadataInput, UpdateMetadataOutput},
     primitives::{AssetId, ClassId, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AssetInputData, AssetOutputData};
+use super::AssetUi;
 
 #[derive(Debug)]
 pub struct UpdateMetadataRequest {
@@ -29,6 +27,27 @@ impl Request<UpdateMetadataInput> for UpdateMetadataRequest {
             metadata: self.input.metadata.clone(),
             asset_id: self.input.asset_id.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct UpdateMetadataChannel {
+    pub input_tx: InputSender<UpdateMetadataRequest>,
+    pub input_rx: InputReceiver<UpdateMetadataRequest>,
+    pub output_tx: OutputSender<UpdateMetadataOutput>,
+    pub output_rx: OutputReceiver<UpdateMetadataOutput>,
+}
+
+impl Default for UpdateMetadataChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<UpdateMetadataRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<UpdateMetadataOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -53,47 +72,41 @@ impl Default for UpdateAssetMetadataInputData {
     }
 }
 
-pub fn update_asset_metadata_ui(
-    ui: &mut egui::Ui,
-    asset_input: &mut ResMut<AssetInputData>,
-    updated_tx: &Res<InputSender<UpdateMetadataRequest>>,
-    asset_output: &Res<AssetOutputData>,
-) {
+pub fn update_asset_metadata_ui(ui: &mut egui::Ui, asset: &mut ResMut<AssetUi>) {
     ui.label("Update Asset Metadata");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *asset_input.update_metadata_input.seed);
+    ui.text_edit_singleline(&mut *asset.data.input.update_metadata.seed);
     ui.label("Class ID");
-    ui.add(
-        egui::DragValue::new::<u64>(&mut *asset_input.update_metadata_input.class_id).speed(0.1),
-    );
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.update_metadata.class_id).speed(0.1));
     ui.label("Asset ID");
-    ui.add(
-        egui::DragValue::new::<u64>(&mut *asset_input.update_metadata_input.asset_id).speed(0.1),
-    );
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.update_metadata.asset_id).speed(0.1));
     ui.label("Metadata");
-    ui.text_edit_multiline(&mut asset_input.update_metadata_input.metadata);
-    if asset_input.update_metadata_input.loading {
+    ui.text_edit_multiline(&mut asset.data.input.update_metadata.metadata);
+    if asset.data.input.update_metadata.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Update").clicked() {
-            updated_tx
+            asset
+                .channels
+                .update_metadata
+                .input_tx
                 .0
                 .send(UpdateMetadataRequest {
                     input: UpdateMetadataInput {
-                        seed: asset_input.update_metadata_input.seed.clone(),
-                        class_id: asset_input.update_metadata_input.class_id,
-                        metadata: serde_json::from_str(&asset_input.update_metadata_input.metadata)
+                        seed: asset.data.input.update_metadata.seed.clone(),
+                        class_id: asset.data.input.update_metadata.class_id,
+                        metadata: serde_json::from_str(&asset.data.input.update_metadata.metadata)
                             .unwrap(),
-                        asset_id: asset_input.update_metadata_input.asset_id,
+                        asset_id: asset.data.input.update_metadata.asset_id,
                     },
                 })
                 .unwrap();
-            asset_input.update_metadata_input.loading = true;
+            asset.data.input.update_metadata.loading = true;
         }
     }
-    if let Some(output) = &asset_output.update_metadata_output {
+    if let Some(output) = &asset.data.output.update_metadata {
         ui.separator();
         ui.label("Asset ID");
         ui.text_edit_singleline(&mut u64::from(output.asset_id).to_string());
@@ -107,28 +120,27 @@ pub fn update_asset_metadata_ui(
 }
 
 pub fn handle_update_metadata_response(
-    mut asset_output: ResMut<AssetOutputData>,
-    mut asset_input: ResMut<AssetInputData>,
-    response_rx: Res<OutputReceiver<UpdateMetadataOutput>>,
+    mut asset: ResMut<AssetUi>,
+    tokio_runtime: Res<TokioRuntime>,
 ) {
-    if let Ok(response_result) = response_rx.0.try_recv() {
+    if let Ok(response_result) = asset.channels.update_metadata.output_rx.0.try_recv() {
         if let Some(response) = response_result {
-            asset_output.update_metadata_output = Some(response);
+            asset.data.output.update_metadata = Some(response);
         }
-        asset_input.update_metadata_input.loading = false;
+        asset.data.input.update_metadata.loading = false;
     }
+
+    request_handler::<UpdateMetadataRequest, UpdateMetadataInput, UpdateMetadataOutput>(
+        tokio_runtime.runtime.clone(),
+        asset.channels.update_metadata.input_rx.clone(),
+        asset.channels.update_metadata.output_tx.clone(),
+    );
 }
 
 pub struct UpdateAssetMetadataPlugin;
 
 impl Plugin for UpdateAssetMetadataPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(
-            setup_in_out_channels::<UpdateMetadataRequest, UpdateMetadataOutput>,
-        )
-        .add_system(
-            request_handler::<UpdateMetadataRequest, UpdateMetadataInput, UpdateMetadataOutput>,
-        )
-        .add_system(handle_update_metadata_response);
+        app.add_system(handle_update_metadata_response);
     }
 }

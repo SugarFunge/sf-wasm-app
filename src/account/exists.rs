@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     account::{AccountExistsInput, AccountExistsOutput},
     primitives::Account,
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AccountInputData, AccountOutputData};
+use super::AccountUi;
 
 #[derive(Debug)]
 pub struct AccountExistsRequest {
@@ -29,6 +27,27 @@ impl Request<AccountExistsInput> for AccountExistsRequest {
     }
 }
 
+#[derive(Resource)]
+pub struct AccountExistsChannel {
+    pub input_tx: InputSender<AccountExistsRequest>,
+    pub input_rx: InputReceiver<AccountExistsRequest>,
+    pub output_tx: OutputSender<AccountExistsOutput>,
+    pub output_rx: OutputReceiver<AccountExistsOutput>,
+}
+
+impl Default for AccountExistsChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<AccountExistsRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<AccountExistsOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
+    }
+}
+
 #[derive(Resource, Debug, Clone)]
 pub struct AccountExistsInputData {
     pub account: Account,
@@ -44,60 +63,56 @@ impl Default for AccountExistsInputData {
     }
 }
 
-pub fn account_exists_ui(
-    ui: &mut egui::Ui,
-    account_input: &mut ResMut<AccountInputData>,
-    exists_tx: &Res<InputSender<AccountExistsRequest>>,
-    account_output: &Res<AccountOutputData>,
-) {
+pub fn account_exists_ui(ui: &mut egui::Ui, account: &mut ResMut<AccountUi>) {
     ui.label("Account Exists");
     ui.separator();
     ui.label("Account");
-    ui.text_edit_singleline(&mut *account_input.exists_input.account);
-    if account_input.exists_input.loading {
+    ui.text_edit_singleline(&mut *account.data.input.exists.account);
+    if account.data.input.exists.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Check").clicked() {
-            exists_tx
+            account
+                .channels
+                .exists
+                .input_tx
                 .0
                 .send(AccountExistsRequest {
                     input: AccountExistsInput {
-                        account: account_input.exists_input.account.clone(),
+                        account: account.data.input.exists.account.clone(),
                     },
                 })
                 .unwrap();
-            account_input.exists_input.loading = true;
+            account.data.input.exists.loading = true;
         }
     }
-    if let Some(output) = &account_output.exists_output {
+    if let Some(output) = &account.data.output.exists {
         ui.separator();
         ui.label("Exists");
         ui.text_edit_singleline(&mut output.exists.to_string());
     }
 }
 
-pub fn handle_exists_response(
-    mut account_output: ResMut<AccountOutputData>,
-    mut account_input: ResMut<AccountInputData>,
-    exists_rx: Res<OutputReceiver<AccountExistsOutput>>,
-) {
-    if let Ok(exists_result) = exists_rx.0.try_recv() {
+pub fn handle_exists_response(mut account: ResMut<AccountUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(exists_result) = account.channels.exists.output_rx.0.try_recv() {
         if let Some(exists) = exists_result {
-            account_output.exists_output = Some(exists);
+            account.data.output.exists = Some(exists);
         }
-        account_input.exists_input.loading = false;
+        account.data.input.exists.loading = false;
     }
+
+    request_handler::<AccountExistsRequest, AccountExistsInput, AccountExistsOutput>(
+        tokio_runtime.runtime.clone(),
+        account.channels.exists.input_rx.clone(),
+        account.channels.exists.output_tx.clone(),
+    );
 }
 
 pub struct AccountExistsPlugin;
 
 impl Plugin for AccountExistsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<AccountExistsRequest, AccountExistsOutput>)
-            .add_system(
-                request_handler::<AccountExistsRequest, AccountExistsInput, AccountExistsOutput>,
-            )
-            .add_system(handle_exists_response);
+        app.add_system(handle_exists_response);
     }
 }

@@ -1,16 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     asset::{CreateInput, CreateOutput},
     primitives::{AssetId, ClassId, Seed},
 };
 
-use crate::{
-    prelude::*,
-    util::{request_handler, setup_in_out_channels},
-};
+use crate::{prelude::*, util::request_handler};
 
-use super::{AssetInputData, AssetOutputData};
+use super::AssetUi;
 
 #[derive(Debug)]
 pub struct CreateAssetRequest {
@@ -29,6 +27,27 @@ impl Request<CreateInput> for CreateAssetRequest {
             metadata: self.input.metadata.clone(),
             asset_id: self.input.asset_id.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct CreateAssetChannel {
+    pub input_tx: InputSender<CreateAssetRequest>,
+    pub input_rx: InputReceiver<CreateAssetRequest>,
+    pub output_tx: OutputSender<CreateOutput>,
+    pub output_rx: OutputReceiver<CreateOutput>,
+}
+
+impl Default for CreateAssetChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<CreateAssetRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<CreateOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -53,42 +72,40 @@ impl Default for CreateAssetInputData {
     }
 }
 
-pub fn create_asset_ui(
-    ui: &mut egui::Ui,
-    asset_input: &mut ResMut<AssetInputData>,
-    create_tx: &Res<InputSender<CreateAssetRequest>>,
-    asset_output: &Res<AssetOutputData>,
-) {
+pub fn create_asset_ui(ui: &mut egui::Ui, asset: &mut ResMut<AssetUi>) {
     ui.label("Create Asset");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *asset_input.create_input.seed);
+    ui.text_edit_singleline(&mut *asset.data.input.create.seed);
     ui.label("Class ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.create_input.class_id).speed(0.1));
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.create.class_id).speed(0.1));
     ui.label("Metadata");
-    ui.text_edit_multiline(&mut asset_input.create_input.metadata);
+    ui.text_edit_multiline(&mut asset.data.input.create.metadata);
     ui.label("Asset ID");
-    ui.add(egui::DragValue::new::<u64>(&mut *asset_input.create_input.asset_id).speed(0.1));
-    if asset_input.create_input.loading {
+    ui.add(egui::DragValue::new::<u64>(&mut *asset.data.input.create.asset_id).speed(0.1));
+    if asset.data.input.create.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Create").clicked() {
-            create_tx
+            asset
+                .channels
+                .create
+                .input_tx
                 .0
                 .send(CreateAssetRequest {
                     input: CreateInput {
-                        seed: asset_input.create_input.seed.clone(),
-                        class_id: asset_input.create_input.class_id,
-                        metadata: serde_json::from_str(&asset_input.create_input.metadata).unwrap(),
-                        asset_id: asset_input.create_input.asset_id.clone(),
+                        seed: asset.data.input.create.seed.clone(),
+                        class_id: asset.data.input.create.class_id,
+                        metadata: serde_json::from_str(&asset.data.input.create.metadata).unwrap(),
+                        asset_id: asset.data.input.create.asset_id.clone(),
                     },
                 })
                 .unwrap();
-            asset_input.create_input.loading = true;
+            asset.data.input.create.loading = true;
         }
     }
-    if let Some(output) = &asset_output.create_output {
+    if let Some(output) = &asset.data.output.create {
         ui.separator();
         ui.label("Class ID");
         ui.text_edit_singleline(&mut u64::from(output.class_id).to_string());
@@ -99,25 +116,25 @@ pub fn create_asset_ui(
     }
 }
 
-pub fn handle_create_response(
-    mut asset_output: ResMut<AssetOutputData>,
-    mut asset_input: ResMut<AssetInputData>,
-    created_rx: Res<OutputReceiver<CreateOutput>>,
-) {
-    if let Ok(created_result) = created_rx.0.try_recv() {
+pub fn handle_create_response(mut asset: ResMut<AssetUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(created_result) = asset.channels.create.output_rx.0.try_recv() {
         if let Some(created) = created_result {
-            asset_output.create_output = Some(created);
+            asset.data.output.create = Some(created);
         }
-        asset_input.create_input.loading = false;
+        asset.data.input.create.loading = false;
     }
+
+    request_handler::<CreateAssetRequest, CreateInput, CreateOutput>(
+        tokio_runtime.runtime.clone(),
+        asset.channels.create.input_rx.clone(),
+        asset.channels.create.output_tx.clone(),
+    );
 }
 
 pub struct CreateAssetPlugin;
 
 impl Plugin for CreateAssetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<CreateAssetRequest, CreateOutput>)
-            .add_system(request_handler::<CreateAssetRequest, CreateInput, CreateOutput>)
-            .add_system(handle_create_response);
+        app.add_system(handle_create_response);
     }
 }

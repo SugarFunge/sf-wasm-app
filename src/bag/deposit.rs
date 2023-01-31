@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
+use crossbeam::channel;
 use sugarfunge_api_types::{
     bag::{DepositInput, DepositOutput},
-    primitives::{Account, AssetId, Balance, Seed, ClassId},
+    primitives::{Account, AssetId, Balance, ClassId, Seed},
 };
 
 use crate::{prelude::*, util::*};
 
-use super::{BagInputData, BagOutputData};
+use super::BagUi;
 
 #[derive(Debug)]
 pub struct DepositBagRequest {
@@ -27,6 +28,27 @@ impl Request<DepositInput> for DepositBagRequest {
             asset_ids: self.input.asset_ids.clone(),
             amounts: self.input.amounts.clone(),
         })
+    }
+}
+
+#[derive(Resource)]
+pub struct DepositBagChannel {
+    pub input_tx: InputSender<DepositBagRequest>,
+    pub input_rx: InputReceiver<DepositBagRequest>,
+    pub output_tx: OutputSender<DepositOutput>,
+    pub output_rx: OutputReceiver<DepositOutput>,
+}
+
+impl Default for DepositBagChannel {
+    fn default() -> Self {
+        let (input_tx, input_rx) = channel::unbounded::<DepositBagRequest>();
+        let (output_tx, output_rx) = channel::unbounded::<Option<DepositOutput>>();
+        Self {
+            input_tx: InputSender(input_tx),
+            input_rx: InputReceiver(input_rx),
+            output_tx: OutputSender(output_tx),
+            output_rx: OutputReceiver(output_rx),
+        }
     }
 }
 
@@ -53,50 +75,48 @@ impl Default for DepositBagInputData {
     }
 }
 
-pub fn deposit_bag_ui(
-    ui: &mut egui::Ui,
-    bag_input: &mut ResMut<BagInputData>,
-    registered_tx: &Res<InputSender<DepositBagRequest>>,
-    bag_output: &Res<BagOutputData>,
-) {
+pub fn deposit_bag_ui(ui: &mut egui::Ui, bag: &mut ResMut<BagUi>) {
     ui.label("Deposit Bag");
     ui.separator();
     ui.label("Seed");
-    ui.text_edit_singleline(&mut *bag_input.deposit_input.seed);
+    ui.text_edit_singleline(&mut *bag.data.input.deposit.seed);
     ui.label("Bag");
-    ui.text_edit_singleline(&mut *bag_input.deposit_input.bag);
+    ui.text_edit_singleline(&mut *bag.data.input.deposit.bag);
     ui.label("Class IDs");
-    vec_u64_input_ui(ui, &mut bag_input.deposit_input.class_ids);
+    vec_u64_input_ui(ui, &mut bag.data.input.deposit.class_ids);
     ui.label("Asset IDs");
-    vec_of_vec_u64_input_ui(ui, &mut bag_input.deposit_input.asset_ids, "Asset ID");
+    vec_of_vec_u64_input_ui(ui, &mut bag.data.input.deposit.asset_ids, "Asset ID");
     ui.label("Amounts");
-    vec_of_vec_u64_input_ui(ui, &mut bag_input.deposit_input.amounts, "Amount");
-    if bag_input.deposit_input.loading {
+    vec_of_vec_u64_input_ui(ui, &mut bag.data.input.deposit.amounts, "Amount");
+    if bag.data.input.deposit.loading {
         ui.separator();
         ui.add(egui::Spinner::default());
     } else {
         if ui.button("Deposit").clicked() {
             let class_ids: Vec<ClassId> =
-                transform_vec_of_u64_to_class_id(bag_input.deposit_input.class_ids.clone());
+                transform_vec_of_u64_to_class_id(bag.data.input.deposit.class_ids.clone());
             let asset_ids: Vec<Vec<AssetId>> =
-                transform_doublevec_of_u64_to_asset_id(bag_input.deposit_input.asset_ids.clone());
+                transform_doublevec_of_u64_to_asset_id(bag.data.input.deposit.asset_ids.clone());
             let amounts: Vec<Vec<Balance>> =
-                transform_doublevec_of_u64_to_balance(bag_input.deposit_input.amounts.clone());
-            registered_tx
+                transform_doublevec_of_u64_to_balance(bag.data.input.deposit.amounts.clone());
+            bag.channels
+                .deposit
+                .input_tx
+                .0
                 .send(DepositBagRequest {
                     input: DepositInput {
-                        seed: bag_input.deposit_input.seed.clone(),
-                        bag: bag_input.deposit_input.bag.clone(),
+                        seed: bag.data.input.deposit.seed.clone(),
+                        bag: bag.data.input.deposit.bag.clone(),
                         class_ids,
                         asset_ids,
                         amounts,
                     },
                 })
                 .unwrap();
-            bag_input.deposit_input.loading = true;
+            bag.data.input.deposit.loading = true;
         }
     }
-    if let Some(output) = &bag_output.deposit_output {
+    if let Some(output) = &bag.data.output.deposit {
         ui.separator();
         ui.label("Bag");
         ui.text_edit_singleline(&mut output.bag.as_str());
@@ -105,25 +125,25 @@ pub fn deposit_bag_ui(
     }
 }
 
-pub fn handle_deposit_response(
-    mut bag_output: ResMut<BagOutputData>,
-    mut bag_input: ResMut<BagInputData>,
-    deposited_rx: Res<OutputReceiver<DepositOutput>>,
-) {
-    if let Ok(deposited_result) = deposited_rx.0.try_recv() {
+pub fn handle_deposit_response(mut bag: ResMut<BagUi>, tokio_runtime: Res<TokioRuntime>) {
+    if let Ok(deposited_result) = bag.channels.deposit.output_rx.0.try_recv() {
         if let Some(deposited) = deposited_result {
-            bag_output.deposit_output = Some(deposited);
+            bag.data.output.deposit = Some(deposited);
         }
-        bag_input.deposit_input.loading = false;
+        bag.data.input.deposit.loading = false;
     }
+
+    request_handler::<DepositBagRequest, DepositInput, DepositOutput>(
+        tokio_runtime.runtime.clone(),
+        bag.channels.deposit.input_rx.clone(),
+        bag.channels.deposit.output_tx.clone(),
+    );
 }
 
 pub struct DepositBagPlugin;
 
 impl Plugin for DepositBagPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup_in_out_channels::<DepositBagRequest, DepositOutput>)
-            .add_system(request_handler::<DepositBagRequest, DepositInput, DepositOutput>)
-            .add_system(handle_deposit_response);
+        app.add_system(handle_deposit_response);
     }
 }
