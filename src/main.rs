@@ -3,6 +3,8 @@ use bevy::{
     prelude::*,
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
+use debug_ui::DebugUiPlugin;
+use prelude::*;
 use simula_action::ActionPlugin;
 use simula_camera::orbitcam::*;
 use simula_viz::{
@@ -11,15 +13,29 @@ use simula_viz::{
     lines::{LineMesh, LinesMaterial, LinesPlugin},
 };
 
+pub mod account;
+pub mod asset;
+pub mod bag;
+pub mod bundle;
+pub mod class;
+pub mod debug_ui;
+pub mod market;
+pub mod prelude;
+pub mod util;
+pub mod validator;
+
 fn main() {
+    let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap());
+
     App::new()
+        .insert_resource(TokioRuntime { runtime })
         .insert_resource(Msaa { samples: 4 })
         .insert_resource(ClearColor(Color::rgb(0.105, 0.10, 0.11)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "[Simbotic] Simula - Empty".to_string(),
-                width: 940.,
-                height: 528.,
+                width: 1024.,
+                height: 612.,
                 ..default()
             },
             ..default()
@@ -31,6 +47,7 @@ fn main() {
         .add_plugin(LinesPlugin)
         .add_plugin(AxesPlugin)
         .add_plugin(GridPlugin)
+        .add_plugin(DebugUiPlugin)
         .add_startup_system(setup)
         .add_system(debug_info)
         .run();
