@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 
 pub mod account;
 pub mod asset;
@@ -22,7 +22,7 @@ pub enum DebugUiActions {
 }
 
 pub fn debug_ui(
-    mut ctx: ResMut<EguiContext>,
+    mut ctx: EguiContexts,
     mut debug_actions: ResMut<DebugUiActions>,
     mut asset: ResMut<asset::AssetUi>,
     mut account: ResMut<account::AccountUi>,

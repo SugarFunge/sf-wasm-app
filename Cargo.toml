@@ -11,18 +11,18 @@ gst = ["simula_video/gst"]
 video = ["simula_video/video"]
 
 [dependencies]
-bevy = { version = "0.9" }
-bevy-inspector-egui = "0.14"
-bevy_egui = "0.17"
-# wgpu-types = "0.13.2"
+bevy = { version = "0.10.0" }
+bevy-inspector-egui = "0.18.0"
+bevy_egui = "0.20.0"
+# wgpu-types = "0.15.1"
 
-simula_core = { git = "https://github.com/Simbotic/simula.git", rev = "11003866b498a08e34ace23480720c666d490a82" }
-simula_camera = { git = "https://github.com/Simbotic/simula.git", rev = "11003866b498a08e34ace23480720c666d490a82" }
-simula_viz = { git = "https://github.com/Simbotic/simula.git", rev = "11003866b498a08e34ace23480720c666d490a82" }
-simula_action = { git = "https://github.com/Simbotic/simula.git", rev = "11003866b498a08e34ace23480720c666d490a82" }
-simula_video = { git = "https://github.com/Simbotic/simula.git", rev = "11003866b498a08e34ace23480720c666d490a82" }
+simula_core = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
+simula_camera = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
+simula_viz = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
+simula_action = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
+simula_video = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
 
-sugarfunge-api-types = { git = "https://github.com/SugarFunge/sugarfunge-api.git", branch = "feature/polkadot-v0.9.34" }
+sugarfunge-api-types = { git = "https://github.com/SugarFunge/sugarfunge-api.git", branch = "feature/polkadot-v0.9.37" }
 
 tokio = { default-features = false, features = [
     "io-std",
@@ -41,7 +41,7 @@ url = "2.3"
 
 [dependencies.subxt]
 git = "https://github.com/SugarFunge/subxt.git"
-branch = "feature/polkadot-v0.9.34"
+branch = "feature/polkadot-v0.9.37"
 default-features = false
 
 [profile.dev.package."*"]

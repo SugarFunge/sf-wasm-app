@@ -1,8 +1,9 @@
 use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
+    window::PresentMode,
 };
-use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use debug_ui::DebugUiPlugin;
 use prelude::*;
 use simula_action::ActionPlugin;
@@ -10,7 +11,7 @@ use simula_camera::orbitcam::*;
 use simula_viz::{
     axes::{Axes, AxesBundle, AxesPlugin},
     grid::{Grid, GridBundle, GridPlugin},
-    lines::{LineMesh, LinesMaterial, LinesPlugin},
+    lines::LinesPlugin,
 };
 
 pub mod debug_ui;
@@ -22,15 +23,17 @@ fn main() {
 
     App::new()
         .insert_resource(TokioRuntime { runtime })
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Msaa::Sample4)
         .insert_resource(ClearColor(Color::rgb(0.105, 0.10, 0.11)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
-                title: "[Simbotic] Simula - Empty".to_string(),
-                width: 1024.,
-                height: 612.,
+            primary_window: Some(Window {
+                title: "[SugarFunge] WASM APP".to_string(),
+                resolution: (1024., 612.).into(),
+                present_mode: PresentMode::AutoVsync,
+                fit_canvas_to_parent: true,
+                prevent_default_event_handling: false,
                 ..default()
-            },
+            }),
             ..default()
         }))
         .add_plugin(WorldInspectorPlugin::new())
@@ -46,13 +49,7 @@ fn main() {
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut lines_materials: ResMut<Assets<LinesMaterial>>,
-    line_mesh: Res<LineMesh>,
-    asset_server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // grid
     let grid_color = Color::rgb(0.08, 0.06, 0.08);
     commands
@@ -64,8 +61,6 @@ fn setup(
                 end_color: grid_color,
                 ..Default::default()
             },
-            mesh: meshes.add(line_mesh.clone()),
-            material: lines_materials.add(LinesMaterial {}),
             transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             ..Default::default()
         })
@@ -78,8 +73,6 @@ fn setup(
                 size: 1.,
                 inner_offset: 5.,
             },
-            mesh: meshes.add(line_mesh.clone()),
-            material: lines_materials.add(LinesMaterial {}),
             transform: Transform::from_xyz(0.0, 0.01, 0.0),
             ..Default::default()
         })
