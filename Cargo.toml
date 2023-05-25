@@ -11,18 +11,18 @@ gst = ["simula_video/gst"]
 video = ["simula_video/video"]
 
 [dependencies]
-bevy = { version = "0.10.0" }
+bevy = { version = "0.10.1" }
 bevy-inspector-egui = "0.18.0"
 bevy_egui = "0.20.0"
 # wgpu-types = "0.15.1"
 
-simula_core = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
-simula_camera = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
-simula_viz = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
-simula_action = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
-simula_video = { git = "https://github.com/Simbotic/simula.git", rev = "d9418e46ebac0fad98b269ba7fc56a01cd1698fb" }
+simula_core = { git = "https://github.com/Simbotic/simula.git", rev = "9cfcfa1602d35a1890cadced86fef728c85b07a9" }
+simula_camera = { git = "https://github.com/Simbotic/simula.git", rev = "9cfcfa1602d35a1890cadced86fef728c85b07a9" }
+simula_viz = { git = "https://github.com/Simbotic/simula.git", rev = "9cfcfa1602d35a1890cadced86fef728c85b07a9" }
+simula_action = { git = "https://github.com/Simbotic/simula.git", rev = "9cfcfa1602d35a1890cadced86fef728c85b07a9" }
+simula_video = { git = "https://github.com/Simbotic/simula.git", rev = "9cfcfa1602d35a1890cadced86fef728c85b07a9" }
 
-sugarfunge-api-types = { git = "https://github.com/SugarFunge/sugarfunge-api.git", branch = "feature/polkadot-v0.9.37" }
+sugarfunge-api-types = { git = "https://github.com/SugarFunge/sugarfunge-api.git", branch = "feature/polkadot-v0.9.42" }
 
 tokio = { default-features = false, features = [
     "io-std",
@@ -35,13 +35,13 @@ crossbeam = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
-enum-iterator = "1.2"
+enum-iterator = "1.4.1"
 enum-display-derive = "0.1.1"
 url = "2.3"
 
 [dependencies.subxt]
 git = "https://github.com/SugarFunge/subxt.git"
-branch = "feature/polkadot-v0.9.37"
+branch = "feature/polkadot-v0.9.42"
 default-features = false
 
 [profile.dev.package."*"]
